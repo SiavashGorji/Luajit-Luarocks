@@ -34,7 +34,7 @@ is free, it has no GUI, but it is just fine with CMake.
 # Installation
 
 ```sh
-git clone https://github.com/torch/luajit-rocks.git
+git clone https://github.com/SiavashGorji/luajit-rocks.git
 cd luajit-rocks
 mkdir build
 cd build
