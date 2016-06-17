@@ -8,9 +8,8 @@ This repository is forked from [torch/luajit-rocks](https://github.com/torch/lua
 
 # Pre-requisites
 
-Install [CMake](http://cmake.org) and [Git](https://git-scm.com/) on your system.
+Install [CMake](http://cmake.org), [Git](https://git-scm.com/), and a version of [Visual Studio 2013/2015](https://www.visualstudio.com/) (Community editions are free) on your system.
 
-Install a version of [Visual Studio 2013/2015](https://www.visualstudio.com/) (Community editions are free) on your system.
 
 # Installation
 
