@@ -1,13 +1,15 @@
 LuaJIT + Luarocks + Torch7 on Windows
 =============================
 
-# What's the point? #
 This is an easy to use installation for _recent_ versions of LuaJIT, luarocks, torch7 and various torch7 modules on Windows.
 The provided LuaJIT, luarocks, torch7 and its modules point to their respective git repository. Unless specified (i.e. necessary), no changes are made, except for the compilation and installation processes.
 This repository is forked from [torch/luajit-rocks](https://github.com/torch/luajit-rocks) with imported changes from [diz-vara/luajit-rocks](https://github.com/diz-vara/luajit-rocks).
 
-# Pre-requisites
+# Current Module Versions
+[LuaJIT](https://github.com/LuaJIT/LuaJIT/tree/v2.1) 2.1.0-beta2
+[luarocks](https://github.com/keplerproject/luarocks) 2.2.0-beta1
 
+# Pre-requisites
 Install [CMake](http://cmake.org), [Git](https://git-scm.com/), and a version of [Visual Studio 2013/2015](https://www.visualstudio.com/) (Community editions are free) on your system.
 
 
