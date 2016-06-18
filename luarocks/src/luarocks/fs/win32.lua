@@ -1,7 +1,6 @@
 --- Windows implementation of filesystem and platform abstractions.
 -- Download http://unxutils.sourceforge.net/ for Windows GNU utilities
 -- used by this module.
---module("luarocks.fs.win32", package.seeall)
 local win32 = {}
 
 local fs = require("luarocks.fs")
@@ -9,6 +8,8 @@ local fs = require("luarocks.fs")
 local cfg = require("luarocks.cfg")
 local dir = require("luarocks.dir")
 local util = require("luarocks.util")
+
+math.randomseed(os.time())
 
 -- Monkey patch io.popen and os.execute to make sure quoting
 -- works as expected.
@@ -23,6 +24,13 @@ os.execute = function(cmd, ...) return _execute(_prefix..cmd, ...) end
 -- @return string: The command-line, with silencing annotation.
 function win32.quiet(cmd)
    return cmd.." 2> NUL 1> NUL"
+end
+
+--- Annotate command string for execution with quiet stderr.
+-- @param cmd string: A command-line string.
+-- @return string: The command-line, with stderr silencing annotation.
+function win32.quiet_stderr(cmd)
+   return cmd.." 2> NUL"
 end
 
 local drive_letter = "[%.a-zA-Z]?:?[\\/]"
@@ -219,6 +227,23 @@ function win32.is_writable(file)
       if fh then fh:close() end
    end
    return result
+end
+
+--- Create a temporary directory.
+-- @param name string: name pattern to use for avoiding conflicts
+-- when creating temporary directory.
+-- @return string or (nil, string): name of temporary directory or (nil, error message) on failure.
+function win32.make_temp_dir(name)
+   assert(type(name) == "string")
+   name = dir.normalize(name)
+
+   local temp_dir = os.getenv("TMP") .. "/luarocks_" .. name:gsub(dir.separator, "_") .. "-" .. tostring(math.floor(math.random() * 10000))
+   local ok, err = fs.make_dir(temp_dir)
+   if ok then
+      return temp_dir
+   else
+      return nil, err
+   end
 end
 
 function win32.tmpname()

@@ -32,8 +32,8 @@ if not ok then
    site_config = {}
 end
 
-cfg.program_version = "2.3.0"
-cfg.program_series = "2.3"
+cfg.program_version = "scm"
+cfg.program_series = "2.2"
 cfg.major_version = (cfg.program_version:match("([^.]%.[^.])")) or cfg.program_series
 cfg.variables = {}
 cfg.rocks_trees = {}
@@ -113,6 +113,10 @@ elseif system == "SunOS" then
 elseif system and system:match("^CYGWIN") then
    cfg.platforms.unix = true
    cfg.platforms.cygwin = true
+elseif system and system:match("^MSYS") then
+   cfg.platforms.unix = true
+   cfg.platforms.msys = true
+   cfg.platforms.cygwin = true
 elseif system and system:match("^Windows") then
    cfg.platforms.windows = true
    cfg.platforms.win32 = true
@@ -120,6 +124,9 @@ elseif system and system:match("^MINGW") then
    cfg.platforms.windows = true
    cfg.platforms.mingw32 = true
    cfg.platforms.win32 = true
+elseif system == "Haiku" then
+   cfg.platforms.unix = true
+   cfg.platforms.haiku = true
 else
    cfg.platforms.unix = true
    -- Fall back to Unix in unknown systems.
@@ -129,7 +136,7 @@ end
 local platform_order = {
    -- Unixes
    unix = 1,
-   bsd = 2,
+   bsd = 2, 
    solaris = 3,
    netbsd = 4,
    openbsd = 5,
@@ -137,11 +144,12 @@ local platform_order = {
    linux = 7,
    macosx = 8,
    cygwin = 9,
+   msys = 10,
+   haiku = 11,
    -- Windows
-   win32 = 10,
-   mingw32 = 11,
-   windows = 12 }
-
+   win32 = 12,
+   mingw32 = 13,
+   windows = 14 }
 
 -- Path configuration:
 local sys_config_file, home_config_file
@@ -163,17 +171,17 @@ else
 end
 
 -- Create global environment for the config files;
-local env_for_config_file = function()
-   local e
+local env_for_config_file = function() 
+   local e 
    e = {
       home = cfg.home,
       lua_version = cfg.lua_version,
       platforms = util.make_shallow_copy(cfg.platforms),
       processor = cfg.target_cpu,   -- remains for compat reasons
       target_cpu = cfg.target_cpu,  -- replaces `processor`
-      os_getenv = os.getenv,
+      os_getenv = os.getenv, 
       dump_env = function()
-         -- debug function, calling it from a config file will show all
+         -- debug function, calling it from a config file will show all 
          -- available globals to that config file
          print(util.show_table(e, "global environment"))
       end,
@@ -193,7 +201,7 @@ local merge_overrides = function(overrides)
    util.deep_merge(cfg, overrides)
 end
 
--- load config file from a list until first succesful one. Info is
+-- load config file from a list until first succesful one. Info is 
 -- added to `cfg` module table, returns filepath of succesfully loaded
 -- file or nil if it failed
 local load_config_file = function(list)
@@ -215,7 +223,7 @@ end
 
 
 -- Load system configuration file
-do
+do 
    sys_config_file_default = sys_config_dir.."/config-"..cfg.lua_version..".lua"
    sys_config_file = load_config_file({
       site_config.LUAROCKS_SYSCONFIG or sys_config_file_default,
@@ -226,18 +234,18 @@ end
 
 -- Load user configuration file (if allowed)
 if not site_config.LUAROCKS_FORCE_CONFIG then
-
+  
    home_config_file_default = home_config_dir.."/config-"..cfg.lua_version..".lua"
-
+   
    local config_env_var   = "LUAROCKS_CONFIG_" .. version_suffix
    local config_env_value = os.getenv(config_env_var)
    if not config_env_value then
       config_env_var   = "LUAROCKS_CONFIG"
       config_env_value = os.getenv(config_env_var)
    end
-
+   
    -- first try environment provided file, so we can explicitly warn when it is missing
-   if config_env_value then
+   if config_env_value then 
       local list = { config_env_value }
       home_config_file = load_config_file(list)
       home_config_ok = (home_config_file ~= nil)
@@ -271,7 +279,7 @@ end
 -- update platforms list; keyed -> array
 do
    local lst = {} -- use temp array to not confuse `pairs` in loop
-   for plat in pairs(cfg.platforms) do
+   for plat in pairs(cfg.platforms) do 
       if cfg.platforms[plat] then  -- entries set to 'false' skipped
          if not platform_order[plat] then
             local pl = ""
@@ -298,6 +306,8 @@ local defaults = {
    hooks_enabled = true,
    deps_mode = "one",
    check_certificates = false,
+   perm_read = "0644",
+   perm_exec = "0755",
 
    lua_modules_path = "/share/lua/"..cfg.lua_version,
    lib_modules_path = "/lib/lua/"..cfg.lua_version,
@@ -309,7 +319,6 @@ local defaults = {
 
    rocks_servers = {
       {
-        "https://raw.githubusercontent.com/torch/rocks/master",
         "https://luarocks.org",
         "https://raw.githubusercontent.com/rocks-moonscript-org/moonrocks-mirror/master/",
         "http://luafr.org/moonrocks/",
@@ -355,6 +364,7 @@ local defaults = {
       FIND = "find",
       TEST = "test",
       CHMOD = "chmod",
+      MKTEMP = "mktemp",
 
       ZIP = "zip",
       UNZIP = "unzip -n",
@@ -397,7 +407,7 @@ if cfg.platforms.windows then
 
    home_config_file = home_config_file and home_config_file:gsub("\\","/")
    defaults.fs_use_modules = false
-   defaults.arch = "win32-"..cfg.target_cpu
+   defaults.arch = "win32-"..cfg.target_cpu 
    defaults.lib_extension = "dll"
    defaults.external_lib_extension = "dll"
    defaults.obj_extension = "obj"
@@ -519,6 +529,23 @@ if cfg.platforms.cygwin then
    defaults.variables.LIBFLAG = "-shared"
 end
 
+if cfg.platforms.msys then
+   -- msys is basically cygwin made out of mingw, meaning the subsytem is unixish
+   -- enough, yet we can freely mix with native win32
+   defaults.external_deps_patterns = {
+      bin = { "?.exe", "?.bat", "?" },
+      lib = { "lib?.so", "lib?.so.*", "lib?.dll.a", "?.dll.a",
+              "lib?.a", "lib?.dll", "?.dll", "?.lib" },
+      include = { "?.h" }
+   }
+   defaults.runtime_external_deps_patterns = {
+      bin = { "?.exe", "?.bat" },
+      lib = { "lib?.so", "?.dll", "lib?.dll" },
+      include = { "?.h" }
+   }
+end
+
+
 if cfg.platforms.bsd then
    defaults.variables.MAKE = "gmake"
    defaults.variables.STATFLAG = "-f '%OLp'"
@@ -579,13 +606,11 @@ defaults.variables.LUA = site_config.LUA_DIR_SET and (defaults.variables.LUA_BIN
 -- Add built-in modules to rocks_provided
 defaults.rocks_provided["lua"] = cfg.lua_version.."-1"
 
-if cfg.lua_version >= "5.2" then
-   -- Lua 5.2+
+if bit32 then -- Lua 5.2+
    defaults.rocks_provided["bit32"] = cfg.lua_version.."-1"
 end
 
-if cfg.lua_version >= "5.3" then
-   -- Lua 5.3+
+if utf8 then -- Lua 5.3+
    defaults.rocks_provided["utf8"] = cfg.lua_version.."-1"
 end
 
@@ -642,17 +667,23 @@ function cfg.make_paths_from_tree(tree)
    return lua_path, lib_path, bin_path
 end
 
-function cfg.package_paths()
+function cfg.package_paths(current)
    local new_path, new_cpath, new_bin = {}, {}, {}
-   for _,tree in ipairs(cfg.rocks_trees) do
+   local function add_tree_to_paths(tree)
       local lua_path, lib_path, bin_path = cfg.make_paths_from_tree(tree)
       table.insert(new_path, lua_path.."/?.lua")
       table.insert(new_path, lua_path.."/?/init.lua")
       table.insert(new_cpath, lib_path.."/?."..cfg.lib_extension)
       table.insert(new_bin, bin_path)
    end
+   if current then
+      add_tree_to_paths(current)
+   end
+   for _,tree in ipairs(cfg.rocks_trees) do
+      add_tree_to_paths(tree)
+   end
    if extra_luarocks_module_dir then
-     table.insert(new_path, extra_luarocks_module_dir)
+      table.insert(new_path, extra_luarocks_module_dir)
    end
    return table.concat(new_path, ";"), table.concat(new_cpath, ";"), table.concat(new_bin, cfg.export_path_separator)
 end

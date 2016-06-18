@@ -1,7 +1,6 @@
 local LFW_ROOT = config.LFW_ROOT
 rocks_servers = {
-   [[https://raw.githubusercontent.com/torch/rocks/master]],
-   [[https://raw.githubusercontent.com/rocks-moonscript-org/moonrocks-mirror/master]]
+   [[http://luarocks.org/repositories/rocks]]
 }
 rocks_trees = {
    { root = LFW_ROOT, rocks_dir = LFW_ROOT..[[\rocks]],

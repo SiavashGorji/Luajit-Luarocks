@@ -1,13 +1,13 @@
-
 --- Fetch back-end for retrieving sources from Git repositories
--- that use http:// transport. For example, for fetching a repository
+-- that use ssh:// transport. For example, for fetching a repository
 -- that requires the following command line:
--- `git clone http://example.com/foo.git`
+-- `git clone ssh://git@example.com/path/foo.git
 -- you can use this in the rockspec:
--- source = { url = "git+http://example.com/foo.git" }
--- Prefer using the normal git:// fetch mode as it is more widely
--- available in older versions of LuaRocks.
-local git_http = {}
+-- source = { url = "git+ssh://git@example.com/path/foo.git" }
+-- It also handles scp-style ssh urls: git@example.com:path/foo.git,
+-- but you have to prepend the "git+ssh://" and why not use the "newer"
+-- style anyway?
+local git_ssh = {}
 
 local git = require("luarocks.fetch.git")
 
@@ -18,9 +18,15 @@ local git = require("luarocks.fetch.git")
 -- @return (string, string) or (nil, string): The absolute pathname of
 -- the fetched source tarball and the temporary directory created to
 -- store it; or nil and an error message.
-function git_http.get_sources(rockspec, extract, dest_dir)
+function git_ssh.get_sources(rockspec, extract, dest_dir)
    rockspec.source.url = rockspec.source.url:gsub("^git.", "")
+
+   -- Handle old-style scp-like git ssh urls
+   if rockspec.source.url:match("^ssh://[^/]+:[^%d]") then
+      rockspec.source.url = rockspec.source.url:gsub("^ssh://", "")
+   end
+
    return git.get_sources(rockspec, extract, dest_dir, "--")
 end
 
-return git_http
+return git_ssh

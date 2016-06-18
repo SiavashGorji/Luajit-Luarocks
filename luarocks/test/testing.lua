@@ -86,6 +86,7 @@ local tests = {
    fail_arg_string_followed_by_flag = function() return run "$luarocks --server --porcelain" end,
    fail_arg_string_unknown = function() return run "$luarocks --invalid-flag=abc" end,
    test_empty_list = function() return run "$luarocks list" end,
+   test_list_outdated = function () return run "$luarocks list --outdated" end,
    fail_sysconfig_err = function()
       mkdir "$testing_lrprefix/etc/luarocks"
       file_set_contents("$testing_lrprefix/etc/luarocks/config.lua", "aoeui")
@@ -265,6 +266,7 @@ local tests = {
    test_path_lr_path = function() return run "$luarocks path --lr-path" end,
    test_path_lr_cpath = function() return run "$luarocks path --lr-cpath" end,
    test_path_lr_bin = function() return run "$luarocks path --lr-bin" end,
+   test_path_with_tree = function() return run "$luarocks path --tree=lua_modules" end,
    fail_purge_missing_tree = function() return run '$luarocks purge --tree="$testing_tree"' end,
    test_purge = function() return run '$luarocks purge --tree="$testing_sys_tree"' end,
    test_remove = function()
@@ -441,6 +443,11 @@ local tests = {
       return run "$luarocks install luarepl"
          and run "$luarocks doc luarepl"
    end,
+   test_doc_home = function()
+      return run "$luarocks install luacov"
+         and run "$luarocks doc luacov --home"
+   end,
+   fail_doc_invalid = function () return run "$luarocks doc invalid" end,
 
    -- Tests for https://github.com/keplerproject/luarocks/issues/375
    test_fetch_base_dir = function()
@@ -452,6 +459,25 @@ local tests = {
          and assert("lua-compat-5.2" == fetch.url_to_base_dir("https://github.com/hishamhm/lua-compat-5.2.tar.bz2"))
          and assert("parser.moon" == fetch.url_to_base_dir("git://github.com/Cirru/parser.moon"))
          and assert("v0.3" == fetch.url_to_base_dir("https://github.com/hishamhm/lua-compat-5.2/archive/v0.3"))
+   end,
+
+   -- Tests for https://github.com/keplerproject/luarocks/issues/552
+   test_install_break_dependencies_warning = function()
+      need_luasocket()
+      return run "$luarocks install say ${new_version_say}"
+         and run "$luarocks install luassert"
+         and run "$luarocks install say ${old_version_say}"
+   end,
+   test_install_break_dependencies_force = function()
+      need_luasocket()
+      return run "$luarocks install say ${new_version_say}"
+         and run "$luarocks install luassert"
+         and run "$luarocks install --force say ${old_version_say}"
+   end,
+   test_install_break_dependencies_force = function()
+      need_luasocket()
+      return run "$luarocks install say ${new_version_say}"
+         and run "$luarocks install luassert"
+         and run "$luarocks install --force-fast say ${old_version_say}"
    end
-   
 }

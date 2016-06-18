@@ -1,6 +1,4 @@
-@SHEBANG@
-
-package.path = [[@CMAKE_INSTALL_PREFIX@/@INSTALL_LUA_PATH_SUBDIR@/?.lua;@CMAKE_INSTALL_PREFIX@/@INSTALL_LUA_PATH_SUBDIR@/?/init.lua;]]..package.path
+#!/usr/bin/env lua
 
 -- this should be loaded first.
 local cfg = require("luarocks.cfg")
