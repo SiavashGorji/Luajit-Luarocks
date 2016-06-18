@@ -1,6 +1,7 @@
 
 --- Module implementing the LuaRocks "search" command.
 -- Queries LuaRocks servers.
+--module("luarocks.search", package.seeall)
 local search = {}
 package.loaded["luarocks.search"] = search
 
@@ -11,7 +12,6 @@ local deps = require("luarocks.deps")
 local cfg = require("luarocks.cfg")
 local util = require("luarocks.util")
 
-util.add_run_function(search)
 search.help_summary = "Query the LuaRocks servers."
 search.help_arguments = "[--source] [--binary] { <name> [<version>] | --all }"
 search.help = [[
@@ -48,8 +48,7 @@ end
 
 --- Store a search result (a rock or rockspec) in the results table.
 -- @param results table: The results table, where keys are package names and
--- values are tables matching version strings to arrays of
--- tables with fields "arch" and "repo".
+-- versions are tables matching version strings to an array of servers.
 -- @param name string: Package name.
 -- @param version string: Package version.
 -- @param arch string: Architecture of rock ("all", "src" or platform
@@ -93,8 +92,7 @@ end
 -- table, optionally checking if version and arch (if given) match
 -- a query.
 -- @param results table: The results table, where keys are package names and
--- values are tables matching version strings to arrays of
--- tables with fields "arch" and "repo".
+-- versions are tables matching version strings to an array of servers.
 -- @param repo string: URL or pathname of the repository.
 -- @param name string: The name of the package being tested.
 -- @param version string: The version of the package being tested.
@@ -125,9 +123,8 @@ end
 -- matches regardless of architecture.
 -- @param results table or nil: If given, this table will store the
 -- results; if not given, a new table will be created.
--- @return table: The results table, where keys are package names and
--- values are tables matching version strings to arrays of
--- tables with fields "arch" and "repo".
+-- @param table: The results table, where keys are package names and
+-- versions are tables matching version strings to an array of servers.
 -- If a table was given in the "results" parameter, that is the result value.
 function search.disk_search(repo, query, results)
    assert(type(repo) == "string")
@@ -158,27 +155,24 @@ function search.disk_search(repo, query, results)
    return results
 end
 
---- Perform search on a rocks server or tree.
+--- Perform search on a rocks server.
 -- @param results table: The results table, where keys are package names and
--- values are tables matching version strings to arrays of
--- tables with fields "arch" and "repo".
--- @param repo string: The URL of a rocks server or
--- the pathname of a rocks tree (as returned by path.rocks_dir()).
+-- versions are tables matching version strings to an array of servers.
+-- @param repo string: The URL of the rocks server.
 -- @param query table: A table describing the query in dependency
 -- format (for example, {name = "filesystem", exact_name = false,
 -- constraints = {op = "~>", version = {1,0}}}, arch = "rockspec").
 -- If the arch field is omitted, the local architecture (cfg.arch)
 -- is used. The special value "any" is also recognized, returning all
 -- matches regardless of architecture.
--- @param lua_version string: Lua version in "5.x" format, defaults to installed version.
--- @return true or, in case of errors, nil, an error message and an optional error code.
-function search.manifest_search(results, repo, query, lua_version)
+-- @return true or, in case of errors, nil and an error message.
+function search.manifest_search(results, repo, query)
    assert(type(results) == "table")
    assert(type(repo) == "string")
    assert(type(query) == "table")
    
    query_arch_as_table(query)
-   local manifest, err, errcode = manif.load_manifest(repo, lua_version)
+   local manifest, err, errcode = manif.load_manifest(repo)
    if not manifest then
       return nil, err, errcode
    end
@@ -194,11 +188,10 @@ end
 
 --- Search on all configured rocks servers.
 -- @param query table: A dependency query.
--- @param lua_version string: Lua version in "5.x" format, defaults to installed version.
 -- @return table: A table where keys are package names
--- and values are tables matching version strings to arrays of
--- tables with fields "arch" and "repo".
-function search.search_repos(query, lua_version)
+-- and values are tables matching version strings to an array of
+-- rocks servers; if no results are found, an empty table is returned.
+function search.search_repos(query)
    assert(type(query) == "table")
 
    local results = {}
@@ -212,7 +205,7 @@ function search.search_repos(query, lua_version)
             if protocol == "file" then
                mirror = pathname
             end
-            local ok, err, errcode = search.manifest_search(results, mirror, query, lua_version)
+            local ok, err, errcode = search.manifest_search(results, mirror, query)
             if errcode == "network" then
                cfg.disabled_servers[repo] = true
             end
@@ -280,66 +273,28 @@ local function pick_latest_version(name, versions)
    return nil
 end
 
--- Find out which other Lua versions provide rock versions matching a query,
--- @param query table: A dependency query matching a single rock.
--- @return table: array of Lua versions supported, in "5.x" format.
-local function supported_lua_versions(query)
-   local results = {}
-
-   for lua_version in util.lua_versions() do
-      if lua_version ~= cfg.lua_version then
-         if search.search_repos(query, lua_version)[query.name] then
-            table.insert(results, lua_version)
-         end
-      end
-   end
-
-   return results
-end
-
---- Attempt to get a single URL for a given search for a rock.
--- @param query table: A dependency query matching a single rock.
--- @return string or (nil, string): URL for latest matching version
--- of the rock if it was found, or nil followed by an error message.
+--- Attempt to get a single URL for a given search.
+-- @param query table: A dependency query.
+-- @return string or table or (nil, string): URL for matching rock if
+-- a single one was found, a table of candidates if it could not narrow to
+-- a single result, or nil followed by an error message.
 function search.find_suitable_rock(query)
    assert(type(query) == "table")
    
    local results = search.search_repos(query)
-   local first_rock = next(results)
-   if not first_rock then
-      if cfg.rocks_provided[query.name] == nil then
-         -- Check if constraints are satisfiable with other Lua versions.
-         local lua_versions = supported_lua_versions(query)
-
-         if #lua_versions ~= 0 then
-            -- Build a nice message in "only Lua 5.x and 5.y but not 5.z." format
-            for i, lua_version in ipairs(lua_versions) do
-               lua_versions[i] = "Lua "..lua_version
-            end
-
-            local versions_message = "only "..table.concat(lua_versions, " and ")..
-               " but not Lua "..cfg.lua_version.."."
-
-            if #query.constraints == 0 then
-               return nil, query.name.." supports "..versions_message
-            elseif #query.constraints == 1 and query.constraints[1].op == "==" then
-               return nil, query.name.." "..query.constraints[1].version.string.." supports "..versions_message
-            else
-               return nil, "Matching "..query.name.." versions support "..versions_message
-            end
-         end
-      end
-
+   local first = next(results)
+   if not first then
       return nil, "No results matching query were found."
-   elseif next(results, first_rock) then
-      -- Shouldn't happen as query must match only one package.
-      return nil, "Several rocks matched query."
-   elseif cfg.rocks_provided[query.name] ~= nil then
-      -- Do not install versions listed in cfg.rocks_provided.
-      return nil, "Rock "..query.name.." "..cfg.rocks_provided[query.name]..
-         " was found but it is provided by VM or 'rocks_provided' in the config file."
+   elseif not next(results, first) then
+      if cfg.rocks_provided[query.name] ~= nil then
+         -- do not install versions that listed in cfg.rocks_provided
+         return nil, "Rock "..query.name..
+                     " "..cfg.rocks_provided[query.name]..
+                     " was found but it is provided by VM or 'rocks_provided' in the config file."
+      end
+      return pick_latest_version(query.name, results[first])
    else
-      return pick_latest_version(query.name, results[first_rock])
+      return results
    end
 end
 
@@ -409,11 +364,12 @@ function search.act_on_src_or_rockspec(action, name, version, ...)
 
    local query = search.make_query(name, version)
    query.arch = "src|rockspec"
-   local url, err = search.find_suitable_rock(query)
-   if not url then
-      return nil, "Could not find a result named "..name..(version and " "..version or "")..": "..err
+   local results, err = search.find_suitable_rock(query)
+   if type(results) == "string" then
+      return action(results, ...)
+   else
+      return nil, "Could not find a result named "..name..(version and " "..version or "").."."
    end
-   return action(url, ...)
 end
 
 --- Driver function for "search" command.
@@ -421,7 +377,9 @@ end
 -- @param version string or nil: a version may also be passed.
 -- @return boolean or (nil, string): True if build was successful; nil and an
 -- error message otherwise.
-function search.command(flags, name, version)
+function search.run(...)
+   local flags, name, version = util.parse_flags(...)
+   
    if flags["all"] then
       name, version = "", nil
    end

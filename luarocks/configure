@@ -40,7 +40,7 @@ system's package manager.
                             Default is \$PREFIX
 
 --lua-version=VERSION       Use specific Lua version: 5.1, 5.2, or 5.3
-                            Default is auto-detected.
+                            Default is "$LUA_VERSION"
 --lua-suffix=SUFFIX         Versioning suffix to use in Lua filenames.
                             Default is "$LUA_SUFFIX" (lua$LUA_SUFFIX...)
 --with-lua=PREFIX           Use Lua from given prefix.
@@ -71,10 +71,25 @@ EOF
 # Helper functions
 
 find_program() {
-   prog=`command -v "$1" 2>/dev/null`
-   if [ -n "$prog" ]
+   path="$PATH"
+   item="`echo "$path" | sed 's/\([^:]*\):.*/\1/'`"
+   path="`echo "$path" | sed -n 's/[^:]*::*\(.*\)/\1/p'`"
+   found="no"
+   while [ -n "$item" ]
+   do
+      if [ -f "$item/$1" ]
+      then
+         found="yes"
+         break
+      fi
+      item="`echo "$path" | sed 's/\([^:]*\):.*/\1/'`"
+      path="`echo "$path" | sed -n 's/[^:]*::*\(.*\)/\1/p'`"
+   done
+   if [ "$found" = "yes" ]
    then
-      dirname "$prog"
+      echo "$item"
+   else
+      echo ""
    fi
 }
 
@@ -101,7 +116,7 @@ find_helper() {
       fi
       shift
    done
-   echo "Could not find $explanation. Tried: $tried."
+   echo "Could not find a $explanation. Tried: $tried."
    die "Make sure one of them is installed and available in your PATH."
 }
 
@@ -162,7 +177,7 @@ do
       LUA_SUFFIX="$value"
       LUA_SUFFIX_SET=yes
       ;;
-   --lua-version|--with-lua-version)
+   --lua-version)
       [ -n "$value" ] || die "Missing value in flag $key."
       LUA_VERSION="$value"
       [ "$LUA_VERSION" = "5.1" -o "$LUA_VERSION" = "5.2" -o "$LUA_VERSION" = "5.3" ] || die "Invalid Lua version in flag $key."
@@ -235,13 +250,13 @@ detect_lua_version() {
          LUA_VERSION=$detected_lua
       elif [ "$LUA_VERSION" != "$detected_lua" ]
       then
-         die "This clashes with the value of --lua-version. Please check your configuration."
+         die "This clashes with the value of --with-lua-version. Please check your configuration."
       fi
    fi
 }
 
 search_interpreter() {
-   suffix="$1"
+   LUA_SUFFIX="$1"
    if [ "$LUA_BINDIR_SET" = "yes" ]
    then
       find_lua="$LUA_BINDIR"
@@ -254,11 +269,10 @@ search_interpreter() {
    else
       find_lua=`find_program lua$suffix`
    fi
-   if [ -n "$find_lua" -a -x "$find_lua/lua$suffix" ]
+   if [ -n "$find_lua" ]
    then
-      echo "Lua interpreter found: $find_lua/lua$suffix..."
-      LUA_SUFFIX=$suffix
-      detect_lua_version "$find_lua/lua$LUA_SUFFIX"
+      echo "Lua interpreter: $find_lua/lua$suffix..."
+      detect_lua_version "$find_lua/lua$suffix"
       return 0
    fi
    return 1
@@ -278,13 +292,9 @@ then
    else
       suffixes="5.3 53 -5.3 -53 5.2 52 -5.2 -52 5.1 51 -5.1 -51"
    fi
-   lua_interp_found=no
-   for suffix in "" `echo $suffixes`
+   for suffix in `echo $suffixes` ""
    do
-      search_interpreter "$suffix" && {
-         lua_interp_found=yes
-         break
-      }
+      search_interpreter "$suffix" && break
    done
 fi
 
@@ -303,7 +313,7 @@ then
       echo "lua$LUA_SUFFIX found in \$PATH: $find_lua"
    else
       echo "lua$LUA_SUFFIX not found in \$PATH."
-      die "You may want to use the flags --with-lua, --with-lua-bin and/or --lua-suffix. See --help."
+      die "You may want to use the flags --with-lua and/or --lua-suffix. See --help."
    fi
 fi
 
@@ -320,18 +330,6 @@ fi
 if [ "$LUA_DIR_SET" = "yes" -a "$LUA_BINDIR_SET" != "yes" ]
 then
    LUA_BINDIR="$LUA_DIR/bin"
-fi
-
-if [ "$lua_interp_found" != "yes" ]
-then
-   echo_n "Checking Lua interpreter... "
-   if [ -x "$LUA_BINDIR/lua$LUA_SUFFIX" ]
-   then
-      echo "lua$LUA_SUFFIX found in $LUA_BINDIR"
-   else
-      echo "lua$LUA_SUFFIX not found (looked in $LUA_BINDIR)"
-      die "You may want to use the flag --with-lua or --with-lua-bin. See --help."
-   fi
 fi
 
 echo_n "Checking Lua includes... "
@@ -362,17 +360,15 @@ fi
 
 if [ "$LUAROCKS_DOWNLOADER_SET" != "yes" ]
 then
-   find_helper "a downloader helper program" curl wget fetch
+   find_helper "downloader helper program" curl wget fetch
    LUAROCKS_DOWNLOADER=$HELPER
 fi
 
 if [ "$LUAROCKS_MD5CHECKER_SET" != "yes" ]
 then
-   find_helper "a MD5 checksum calculator" md5sum openssl md5
+   find_helper "MD5 checksum calculator" md5sum openssl md5
    LUAROCKS_MD5CHECKER=$HELPER
 fi
-
-find_helper "an 'unzip' program" unzip
 
 echo_n "Configuring for system... "
 if uname -s
@@ -423,10 +419,6 @@ then
    if [ -n "$GCC_ARCH" -a -d "/usr/lib/$GCC_ARCH" ]
    then
       MULTIARCH_SUBDIR="lib/$GCC_ARCH"
-   elif [ -d "/usr/lib64" ]
-   then
-      # Useful for Fedora systems
-      MULTIARCH_SUBDIR="lib64"
    fi
 fi
 

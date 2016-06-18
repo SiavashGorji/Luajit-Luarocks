@@ -1,5 +1,6 @@
 
 --- Generic utilities for handling pathnames.
+--module("luarocks.dir", package.seeall)
 local dir = {}
 package.loaded["luarocks.dir"] = dir
 

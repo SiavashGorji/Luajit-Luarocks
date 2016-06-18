@@ -11,6 +11,7 @@
 -- comparison criteria is the source code of this module, but the
 -- test/test_deps.lua file included with LuaRocks provides some
 -- insights on what these criteria are.
+--module("luarocks.deps", package.seeall)
 local deps = {}
 package.loaded["luarocks.deps"] = deps
 
@@ -246,16 +247,12 @@ end
 function deps.show_dep(dep, internal)
    assert(type(dep) == "table")
    assert(type(internal) == "boolean" or not internal)
-
-   if #dep.constraints > 0 then
-      local pretty = {}
-      for _, c in ipairs(dep.constraints) do
-         table.insert(pretty, c.op .. " " .. deps.show_version(c.version, internal))
-      end
-      return dep.name.." "..table.concat(pretty, ", ")
-   else
-      return dep.name
+   
+   local pretty = {}
+   for _, c in ipairs(dep.constraints) do
+      table.insert(pretty, c.op .. " " .. deps.show_version(c.version, internal))
    end
+   return dep.name.." "..table.concat(pretty, ", ")
 end
 
 --- A more lenient check for equivalence between versions.
@@ -321,32 +318,48 @@ end
 -- @param dep table: A dependency parsed in table format.
 -- @param blacklist table: Versions that can't be accepted. Table where keys
 -- are program versions and values are 'true'.
--- @return string or nil: latest installed version of the rock matching the dependency
+-- @return table or nil: A table containing fields 'name' and 'version'
+-- representing an installed rock which matches the given dependency,
 -- or nil if it could not be matched.
 local function match_dep(dep, blacklist, deps_mode)
    assert(type(dep) == "table")
 
-   local versions
+   local versions = cfg.rocks_provided[dep.name]
    if cfg.rocks_provided[dep.name] then
       -- provided rocks have higher priority than manifest's rocks
       versions = { cfg.rocks_provided[dep.name] }
    else
       versions = manif_core.get_versions(dep.name, deps_mode)
    end
-
-   local latest_version
-   for _, vstring in ipairs(versions) do
-      if not blacklist or not blacklist[vstring] then
-         local version = deps.parse_version(vstring)
-         if deps.match_constraints(version, dep.constraints) then
-            if not latest_version or version > latest_version then
-               latest_version = version
-            end
+   if not versions then
+      return nil
+   end
+   if blacklist then
+      local i = 1
+      while versions[i] do
+         if blacklist[versions[i]] then
+            table.remove(versions, i)
+         else
+            i = i + 1
          end
       end
    end
-
-   return latest_version and latest_version.string
+   local candidates = {}
+   for _, vstring in ipairs(versions) do
+      local version = deps.parse_version(vstring)
+      if deps.match_constraints(version, dep.constraints) then
+         table.insert(candidates, version)
+      end
+   end
+   if #candidates == 0 then
+      return nil
+   else
+      table.sort(candidates)
+      return {
+         name = dep.name,
+         version = candidates[#candidates].string
+      }
+   end
 end
 
 --- Attempt to match dependencies of a rockspec to installed rocks.
@@ -369,7 +382,7 @@ function deps.match_deps(rockspec, blacklist, deps_mode)
       local found = match_dep(dep, blacklist and blacklist[dep.name] or nil, deps_mode)
       if found then
          if not cfg.rocks_provided[dep.name] then
-            matched[dep] = {name = dep.name, version = found}
+            matched[dep] = found
          end
       else
          if dep.constraints[1] and dep.constraints[1].no_upgrade then
@@ -391,13 +404,6 @@ local function values_set(tbl)
       set[v] = true
    end
    return set
-end
-
-local function rock_status(name, deps_mode)
-   local search = require("luarocks.search")
-   local installed = match_dep(search.make_query(name), nil, deps_mode)
-   local installation_type = cfg.rocks_provided[name] and "provided by VM" or "installed"
-   return installed and installed.." "..installation_type or "not installed"
 end
 
 --- Check dependencies of a rock and attempt to install any missing ones.
@@ -439,53 +445,52 @@ function deps.fulfill_dependencies(rockspec, deps_mode)
       end
    end
 
-   local first_missing_dep = true
+   local _, missing, no_upgrade = deps.match_deps(rockspec, nil, deps_mode)
 
-   for _, dep in ipairs(rockspec.dependencies) do
-      if not match_dep(dep, nil, deps_mode) then
-         if first_missing_dep then
-            util.printout(("Missing dependencies for %s %s:"):format(rockspec.name, rockspec.version))
-            first_missing_dep = false
-         end
-
-         util.printout(("   %s (%s)"):format(deps.show_dep(dep), rock_status(dep.name, deps_mode)))
+   if next(no_upgrade) then
+      util.printerr("Missing dependencies for "..rockspec.name.." "..rockspec.version..":")
+      for _, dep in pairs(no_upgrade) do
+         util.printerr(deps.show_dep(dep))
       end
-   end
-
-   first_missing_dep = true
-
-   for _, dep in ipairs(rockspec.dependencies) do
-      if not match_dep(dep, nil, deps_mode) then
-         if first_missing_dep then
-            util.printout()
-            first_missing_dep = false
-         end
-
-         util.printout(("%s %s depends on %s (%s)"):format(
-            rockspec.name, rockspec.version, deps.show_dep(dep), rock_status(dep.name, deps_mode)))
-
-         if dep.constraints[1] and dep.constraints[1].no_upgrade then
-            util.printerr("This version of "..rockspec.name.." is designed for use with")
-            util.printerr(deps.show_dep(dep)..", but is configured to avoid upgrading it")
-            util.printerr("automatically. Please upgrade "..dep.name.." with")
-            util.printerr("   luarocks install "..dep.name)
-            util.printerr("or choose an older version of "..rockspec.name.." with")
-            util.printerr("   luarocks search "..rockspec.name)
-            return nil, "Failed matching dependencies"
-         end
-
-         local url, search_err = search.find_suitable_rock(dep)
-         if not url then
-            return nil, "Could not satisfy dependency "..deps.show_dep(dep)..": "..search_err
-         end
-         util.printout("Installing "..url)
-         local ok, install_err, errcode = install.command({deps_mode = deps_mode}, url)
-         if not ok then
-            return nil, "Failed installing dependency: "..url.." - "..install_err, errcode
+      if next(missing) then
+         for _, dep in pairs(missing) do
+            util.printerr(deps.show_dep(dep))
          end
       end
+      util.printerr()
+      for _, dep in pairs(no_upgrade) do
+         util.printerr("This version of "..rockspec.name.." is designed for use with")
+         util.printerr(deps.show_dep(dep)..", but is configured to avoid upgrading it")
+         util.printerr("automatically. Please upgrade "..dep.name.." with")
+         util.printerr("   luarocks install "..dep.name)
+         util.printerr("or choose an older version of "..rockspec.name.." with")
+         util.printerr("   luarocks search "..rockspec.name)
+      end
+      return nil, "Failed matching dependencies."
    end
 
+   if next(missing) then
+      util.printerr()
+      util.printerr("Missing dependencies for "..rockspec.name..":")
+      for _, dep in pairs(missing) do
+         util.printerr(deps.show_dep(dep))
+      end
+      util.printerr()
+
+      for _, dep in pairs(missing) do
+         -- Double-check in case dependency was filled during recursion.
+         if not match_dep(dep, nil, deps_mode) then
+            local rock = search.find_suitable_rock(dep)
+            if not rock then
+               return nil, "Could not satisfy dependency: "..deps.show_dep(dep)
+            end
+            local ok, err, errcode = install.run(rock)
+            if not ok then
+               return nil, "Failed installing dependency: "..rock.." - "..err, errcode
+            end
+         end
+      end
+   end
    return true
 end
 
@@ -540,11 +545,10 @@ function deps.check_external_deps(rockspec, mode)
       subdirs = cfg.runtime_external_deps_subdirs
    end
    if rockspec.external_dependencies then
-      for name, ext_files in util.sortedpairs(rockspec.external_dependencies) do
+      for name, files in pairs(rockspec.external_dependencies) do
          local ok = true
-         local failed_files = {program = {}, header = {}, library = {}}
-         local failed_dirname
-         local failed_testfile
+         local failed_file = nil
+         local failed_dirname = nil
          for _, extdir in ipairs(cfg.external_deps_dirs) do
             ok = true
             local prefix = vars[name.."_DIR"]
@@ -573,7 +577,7 @@ function deps.check_external_deps(rockspec, mode)
                end
                prefix = prefix.prefix
             end
-            for dirname, dirdata in util.sortedpairs(dirs) do
+            for dirname, dirdata in pairs(dirs) do
                local paths
                local path_var_value = vars[name.."_"..dirname]
                if path_var_value then
@@ -587,7 +591,7 @@ function deps.check_external_deps(rockspec, mode)
                   paths = { dir.path(prefix, dirdata.subdir) }
                end
                dirdata.dir = paths[1]
-               local file = ext_files[dirdata.testfile]
+               local file = files[dirdata.testfile]
                if file then
                   local files = {}
                   if not file:match("%.") then
@@ -602,23 +606,17 @@ function deps.check_external_deps(rockspec, mode)
                      table.insert(files, file)
                   end
                   local found = false
-                  for _, f in ipairs(files) do
-
+                  failed_file = nil
+                  for _, f in pairs(files) do
                      -- small convenience hack
                      if f:match("%.so$") or f:match("%.dylib$") or f:match("%.dll$") then
                         f = f:gsub("%.[^.]+$", "."..cfg.external_lib_extension)
                      end
-
-                     local pattern
-                     if f:match("%*") then
-                        pattern = f:gsub("%.", "%%."):gsub("%*", ".*")
-                        f = "matching "..f
-                     end
-
                      for _, d in ipairs(paths) do
-                        if pattern then
+                        if f:match("%*") then
+                           local replaced = f:gsub("%.", "%%."):gsub("%*", ".*")
                            for entry in fs.dir(d) do
-                              if entry:match(pattern) then
+                              if entry:match(replaced) then
                                  found = true
                                  break
                               end
@@ -629,18 +627,21 @@ function deps.check_external_deps(rockspec, mode)
                         if found then
                            dirdata.dir = d
                            break
-                        else
-                           table.insert(failed_files[dirdata.testfile], f.." in "..d)
                         end
                      end
                      if found then
                         break
+                     else
+                        if failed_file then
+                           failed_file = failed_file .. ", or " .. f
+                        else
+                           failed_file = f
+                        end
                      end
                   end
                   if not found then
                      ok = false
                      failed_dirname = dirname
-                     failed_testfile = dirdata.testfile
                      break
                   end
                end
@@ -654,20 +655,7 @@ function deps.check_external_deps(rockspec, mode)
             end
          end
          if not ok then
-            local lines = {"Could not find "..failed_testfile.." file for "..name}
-
-            local failed_paths = {}
-            for _, failed_file in ipairs(failed_files[failed_testfile]) do
-               if not failed_paths[failed_file] then
-                  failed_paths[failed_file] = true
-                  table.insert(lines, "  No file "..failed_file)
-               end
-            end
-
-            table.insert(lines, "You may have to install "..name.." in your system and/or pass "..name.."_DIR or "..name.."_"..failed_dirname.." to the luarocks command.")
-            table.insert(lines, "Example: luarocks install "..rockspec.name.." "..name.."_DIR=/usr/local")
-
-            return nil, table.concat(lines, "\n"), "dependency"
+            return nil, "Could not find expected file "..failed_file.." for "..name.." -- you may have to install "..name.." in your system and/or pass "..name.."_DIR or "..name.."_"..failed_dirname.." to the luarocks command. Example: luarocks install "..rockspec.name.." "..name.."_DIR=/usr/local", "dependency"
          end
       end
    end

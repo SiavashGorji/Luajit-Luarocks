@@ -1,8 +1,8 @@
 
+--module("luarocks.write_rockspec", package.seeall)
 local write_rockspec = {}
 package.loaded["luarocks.write_rockspec"] = write_rockspec
 
-local cfg = require("luarocks.cfg")
 local dir = require("luarocks.dir")
 local fetch = require("luarocks.fetch")
 local fs = require("luarocks.fs")
@@ -11,35 +11,31 @@ local persist = require("luarocks.persist")
 local type_check = require("luarocks.type_check")
 local util = require("luarocks.util")
 
-util.add_run_function(write_rockspec)
 write_rockspec.help_summary = "Write a template for a rockspec file."
-write_rockspec.help_arguments = "[--output=<file> ...] [<name>] [<version>] [<url>|<path>]"
+write_rockspec.help_arguments = "[--output=<file> ...] [<name>] [<version>] {<url>|<path>}"
 write_rockspec.help = [[
 This command writes an initial version of a rockspec file,
-based on a name, a version, and a location (an URL or a local path).
-If only two arguments are given, the first one is considered the name and the
-second one is the location.
-If only one argument is given, it must be the location.
-If no arguments are given, current directory is used as location.
-LuaRocks will attempt to infer name and version if not given,
-using 'scm' as default version.
+based on an URL or a local path. You may use a relative path such as '.'.
+If a local path is given, name and version arguments are mandatory.
+For URLs, LuaRocks will attempt to infer name and version if not given.
+
+If a repository URL is given with no version, it creates an 'scm' rock.
 
 Note that the generated file is a _starting point_ for writing a
 rockspec, and is not guaranteed to be complete or correct.
 
---output=<file>          Write the rockspec with the given filename.
-                         If not given, a file is written in the current
-                         directory with a filename based on given name and version.
---license="<string>"     A license string, such as "MIT/X11" or "GNU GPL v3".
---summary="<txt>"        A short one-line description summary.
---detailed="<txt>"       A longer description string.
---homepage=<url>         Project homepage.
---lua-version=<ver>      Supported Lua versions. Accepted values are "5.1", "5.2",
-                         "5.3", "5.1,5.2", "5.2,5.3", or "5.1,5.2,5.3".
---rockspec-format=<ver>  Rockspec format version, such as "1.0" or "1.1".
---tag=<tag>              Tag to use. Will attempt to extract version number from it.
---lib=<lib>[,<lib>]      A comma-separated list of libraries that C files need to
-                         link to.
+--output=<file>       Write the rockspec with the given filename.
+                      If not given, a file is written in the current
+                      directory with a filename based on given name and version.
+--license="<string>"  A license string, such as "MIT/X11" or "GNU GPL v3".
+--summary="<txt>"     A short one-line description summary.
+--detailed="<txt>"    A longer description string.
+--homepage=<url>      Project homepage.
+--lua-version=<ver>   Supported Lua versions. Accepted values are "5.1", "5.2",
+                      "5.3", "5.1,5.2", "5.2,5.3", or "5.1,5.2,5.3".
+--tag=<tag>           Tag to use. Will attempt to extract version number from it.
+--lib=<lib>[,<lib>]   A comma-separated list of libraries that C files need to
+                      link to.
 ]]
 
 local function open_file(name)
@@ -80,24 +76,25 @@ local function configure_lua_version(rockspec, luaver)
    end
 end
 
-local function detect_description()
+local function detect_description(rockspec)
    local fd = open_file("README.md") or open_file("README")
    if not fd then return end
    local data = fd:read("*a")
    fd:close()
    local paragraph = data:match("\n\n([^%[].-)\n\n")
    if not paragraph then paragraph = data:match("\n\n(.*)") end
-   local summary, detailed
    if paragraph then
-      detailed = paragraph
-
       if #paragraph < 80 then
-         summary = paragraph:gsub("\n", "")
+         rockspec.description.summary = paragraph:gsub("\n", "")
+         rockspec.description.detailed = paragraph
       else
-         summary = paragraph:gsub("\n", " "):match("([^.]*%.) ")
+         local summary = paragraph:gsub("\n", " "):match("([^.]*%.) ")
+         if summary then
+            rockspec.description.summary = summary:gsub("\n", "")
+         end
+         rockspec.description.detailed = paragraph
       end
    end
-   return summary, detailed
 end
 
 local function detect_mit_license(data)
@@ -110,32 +107,6 @@ local function detect_mit_license(data)
       end
    end
    return sum == 78656
-end
-
-local simple_scm_protocols = {
-   git = true, ["git+http"] = true, ["git+https"] = true,
-   hg = true, ["hg+http"] = true, ["hg+https"] = true
-}
-
-local function detect_url_from_command(program, args, directory)
-   local command = fs.Q(cfg.variables[program:upper()]).. " "..args
-   local pipe = io.popen(fs.command_at(directory, fs.quiet_stderr(command)))
-   if not pipe then return nil end
-   local url = pipe:read("*a"):match("^([^\r\n]+)")
-   pipe:close()
-   if not url then return nil end
-   if not util.starts_with(url, program.."://") then
-      url = program.."+"..url
-   end
-
-   if simple_scm_protocols[dir.split_url(url)] then
-      return url
-   end
-end
-
-local function detect_scm_url(directory)
-   return detect_url_from_command("git", "config --get remote.origin.url", directory) or
-      detect_url_from_command("hg", "paths default", directory)
 end
 
 local function show_license(rockspec)
@@ -225,48 +196,61 @@ local function rockspec_cleanup(rockspec)
    rockspec.name = nil
 end
 
-function write_rockspec.command(flags, name, version, url_or_dir)
+function write_rockspec.run(...)
+   local flags, name, version, url_or_dir = util.parse_flags(...)
+   
    if not name then
-      url_or_dir = "."
-   elseif not version then
+      return nil, "Missing arguments. "..util.see_help("write_rockspec")
+   end
+
+   if name and not version then
       url_or_dir = name
       name = nil
    elseif not url_or_dir then
       url_or_dir = version
-      version = nil
    end
 
+   if flags["tag"] == true then
+      return nil, "Incorrect usage: --tag requires an argument. "..util.see_help("write_rockspec")
+   end
+   
    if flags["tag"] then
       if not version then
          version = flags["tag"]:gsub("^v", "")
       end
    end
-
+   
    local protocol, pathname = dir.split_url(url_or_dir)
-   if protocol == "file" then
-      if pathname == "." then
-         name = name or dir.base_name(fs.current_dir())
+   if not fetch.is_basic_protocol(protocol) then
+      if not name then
+         name = dir.base_name(url_or_dir):gsub("%.[^.]+$", "")
       end
-   elseif fetch.is_basic_protocol(protocol) then
+      if not version then
+         version = "scm"
+      end
+   elseif protocol ~= "file" then
       local filename = dir.base_name(url_or_dir)
       local newname, newversion = filename:match("(.*)-([^-]+)")
-      if newname then
-         name = name or newname
-         version = version or newversion:gsub("%.[a-z]+$", ""):gsub("%.tar$", "")
+      if (not name) and newname then
+         name = newname
       end
-   else
-      name = name or dir.base_name(url_or_dir):gsub("%.[^.]+$", "")
+      if (not version) and newversion then
+         version = newversion:gsub(".[a-z]+$", ""):gsub(".tar$", "")
+      end
+      if not (name and version) then
+         return nil, "Missing name and version arguments. "..util.see_help("write_rockspec")
+      end
+   elseif not version then
+      return nil, "Missing name and version arguments. "..util.see_help("write_rockspec")
    end
-
-   if not name then
-      return nil, "Could not infer rock name. "..util.see_help("write_rockspec")
-   end
-   version = version or "scm"
 
    local filename = flags["output"] or dir.path(fs.current_dir(), name:lower().."-"..version.."-1.rockspec")
+   
+   if not flags["homepage"] and url_or_dir:match("^git://github.com") then
+      flags["homepage"] = "http://"..url_or_dir:match("^[^:]+://(.*)")
+   end
 
    local rockspec = {
-      rockspec_format = flags["rockspec-format"],
       package = name,
       name = name:lower(),
       version = version.."-1",
@@ -311,25 +295,10 @@ function write_rockspec.command(flags, name, version, url_or_dir)
       else
          local_dir = nil
       end
-   else
-      rockspec.source.url = detect_scm_url(local_dir) or rockspec.source.url
    end
    
    if not local_dir then
       local_dir = "."
-   end
-
-   if not flags["homepage"] then
-      local url_protocol, url_path = dir.split_url(rockspec.source.url)
-
-      if simple_scm_protocols[url_protocol] then
-         for _, domain in ipairs({"github.com", "bitbucket.org", "gitlab.com"}) do
-            if util.starts_with(url_path, domain) then
-               rockspec.description.homepage = "https://"..url_path:gsub("%.git$", "")
-               break
-            end
-         end
-      end
    end
    
    local libs = nil
@@ -347,11 +316,7 @@ function write_rockspec.command(flags, name, version, url_or_dir)
    local ok, err = fs.change_dir(local_dir)
    if not ok then return nil, "Failed reaching files from project - error entering directory "..local_dir end
 
-   if (not flags["summary"]) or (not flags["detailed"]) then
-      local summary, detailed = detect_description()
-      rockspec.description.summary = flags["summary"] or summary
-      rockspec.description.detailed = flags["detailed"] or detailed
-   end
+   detect_description(rockspec)
 
    local is_mit = show_license(rockspec)
    

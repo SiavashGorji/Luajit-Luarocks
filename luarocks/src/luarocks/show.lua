@@ -1,5 +1,6 @@
 --- Module implementing the LuaRocks "show" command.
 -- Shows information about an installed rock.
+--module("luarocks.show", package.seeall)
 local show = {}
 package.loaded["luarocks.show"] = show
 
@@ -10,9 +11,7 @@ local path = require("luarocks.path")
 local deps = require("luarocks.deps")
 local fetch = require("luarocks.fetch")
 local manif = require("luarocks.manif")
-
-util.add_run_function(show)
-show.help_summary = "Show information about an installed rock."
+show.help_summary = "Shows information about an installed rock."
 
 show.help = [[
 <argument> is an existing package name.
@@ -29,9 +28,7 @@ With these flags, return only the desired information:
 ]]
 
 local function keys_as_string(t, sep)
-   local keys = util.keys(t)
-   table.sort(keys)
-   return table.concat(keys, sep or " ")
+    return table.concat(util.keys(t), sep or " ")
 end
 
 local function word_wrap(line) 
@@ -91,21 +88,12 @@ function show.pick_installed_rock(name, version, tree)
    return name, version, repo, repo_url
 end
 
-local function installed_rock_label(name, tree)
-   local installed, version
-   if cfg.rocks_provided[name] then
-      installed, version = true, cfg.rocks_provided[name]
-   else
-      installed, version = show.pick_installed_rock(name, nil, tree)
-   end
-   return installed and "(using "..version..")" or "(missing)"
-end
-
 --- Driver function for "show" command.
 -- @param name or nil: an existing package name.
 -- @param version string or nil: a version may also be passed.
 -- @return boolean: True if succeeded, nil on errors.
-function show.command(flags, name, version)
+function show.run(...)
+   local flags, name, version = util.parse_flags(...)
    if not name then
       return nil, "Argument missing. "..util.see_help("show")
    end
@@ -155,26 +143,10 @@ function show.command(flags, name, version)
             util.printout("\t"..mod.." ("..path.which(mod, filename, name, version, repo, manifest)..")")
          end
       end
-      local direct_deps = {}
-      if #rockspec.dependencies > 0 then
+      if next(minfo.dependencies) then
          util.printout()
          util.printout("Depends on:")
-         for _, dep in ipairs(rockspec.dependencies) do
-            direct_deps[dep.name] = true
-            util.printout("\t"..deps.show_dep(dep).." "..installed_rock_label(dep.name, flags["tree"]))
-         end
-      end
-      local has_indirect_deps
-      for dep_name in util.sortedpairs(minfo.dependencies) do
-         if not direct_deps[dep_name] then
-            if not has_indirect_deps then
-               util.printout()
-               util.printout("Indirectly pulling:")
-               has_indirect_deps = true
-            end
-
-            util.printout("\t"..dep_name.." "..installed_rock_label(dep_name, flags["tree"]))
-         end
+         util.printout("\t"..keys_as_string(minfo.dependencies, "\n\t"))
       end
       util.printout()
    end

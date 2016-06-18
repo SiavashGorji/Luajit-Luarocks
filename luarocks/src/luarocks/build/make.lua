@@ -1,5 +1,6 @@
 
 --- Build back-end for using Makefile-based packages.
+--module("luarocks.build.make", package.seeall)
 local make = {}
 
 local unpack = unpack or table.unpack

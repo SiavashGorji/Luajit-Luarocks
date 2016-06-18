@@ -4,6 +4,7 @@
 -- inside specific functions) to avoid interdependencies,
 -- as this is used in the bootstrapping stage of luarocks.cfg.
 
+--module("luarocks.util", package.seeall)
 local util = {}
 
 local unpack = unpack or table.unpack
@@ -62,77 +63,6 @@ function util.matchquote(s)
    return (s:gsub("[?%-+*%[%].%%()$^]","%%%1"))
 end
 
---- List of supported arguments.
--- Arguments that take no parameters are marked with the boolean true.
--- Arguments that take a parameter are marked with a descriptive string.
--- Arguments that may take an empty string are described in quotes,
--- (as in the value for --detailed="<text>").
--- For all other string values, it means the parameter is mandatory.
-local supported_flags = {
-   ["all"] = true,
-   ["api-key"] = "<key>",
-   ["append"] = true,
-   ["arch"] = "<arch>",
-   ["bin"] = true,
-   ["binary"] = true,
-   ["branch"] = "<branch-name>",
-   ["debug"] = true,
-   ["deps"] = true,
-   ["deps-mode"] = "<mode>",
-   ["detailed"] = "\"<text>\"",
-   ["force"] = true,
-   ["force-fast"] = true,
-   ["from"] = "<server>",
-   ["help"] = true,
-   ["home"] = true,
-   ["homepage"] = "\"<url>\"",
-   ["keep"] = true,
-   ["lib"] = "<library>",
-   ["license"] = "\"<text>\"",
-   ["list"] = true,
-   ["local"] = true,
-   ["local-tree"] = true,
-   ["lr-bin"] = true,
-   ["lr-cpath"] = true,
-   ["lr-path"] = true,
-   ["lua-version"] = "<vers>",
-   ["lua-ver"] = true,
-   ["lua-incdir"] = true,
-   ["lua-libdir"] = true,
-   ["modules"] = true,
-   ["mversion"] = true,
-   ["no-refresh"] = true,
-   ["nodeps"] = true,
-   ["old-versions"] = true,
-   ["only-deps"] = true,
-   ["only-from"] = "<server>",
-   ["only-server"] = "<server>",
-   ["only-sources"] = "<url>",
-   ["only-sources-from"] = "<url>",
-   ["outdated"] = true,
-   ["output"] = "<file>",
-   ["pack-binary-rock"] = true,
-   ["porcelain"] = true,
-   ["quick"] = true,
-   ["rock-dir"] = true,
-   ["rock-tree"] = true,
-   ["rock-trees"] = true,
-   ["rockspec"] = true,
-   ["rockspec-format"] = "<ver>",
-   ["server"] = "<server>",
-   ["skip-pack"] = true,
-   ["source"] = true,
-   ["summary"] = "\"<text>\"",
-   ["system-config"] = true,
-   ["tag"] = "<tag>",
-   ["timeout"] = "<seconds>",
-   ["to"] = "<path>",
-   ["tree"] = "<path>",
-   ["user-config"] = true,
-   ["verbose"] = true,
-   ["version"] = true,
-}
-
 --- Extract flags from an arguments list.
 -- Given string arguments, extract flag arguments into a flags set.
 -- For example, given "foo", "--tux=beep", "--bla", "bar", "--baz",
@@ -141,66 +71,51 @@ local supported_flags = {
 function util.parse_flags(...)
    local args = {...}
    local flags = {}
-   local i = 1
-   local out = {}
-   local ignore_flags = false
-   while i <= #args do
+   for i = #args, 1, -1 do
       local flag = args[i]:match("^%-%-(.*)")
-      if flag == "--" then
-         ignore_flags = true
-      end
-      if flag and not ignore_flags then
+      if flag then
          local var,val = flag:match("([a-z_%-]*)=(.*)")
          if val then
-            local vartype = supported_flags[var]
-            if type(vartype) == "string" then
-               if val == "" and vartype:sub(1,1) ~= '"' then
-                  return { ERROR = "Invalid argument: parameter to flag --"..var.."="..vartype.." cannot be empty." }
-               end
-               flags[var] = val
-            else
-               if vartype then
-                  return { ERROR = "Invalid argument: flag --"..var.." does not take an parameter." }
-               else
-                  return { ERROR = "Invalid argument: unknown flag --"..var.."." }
-               end
-            end
+            flags[var] = val
          else
-            local var = flag
-            local vartype = supported_flags[var]
-            if type(vartype) == "string" then
-               i = i + 1
-               local val = args[i]
-               if not val then
-                  return { ERROR = "Invalid argument: flag --"..var.."="..vartype.." expects a parameter." }
-               end
-               if val:match("^%-%-.*") then
-                  return { ERROR = "Invalid argument: flag --"..var.."="..vartype.." expects a parameter (if you really want to pass "..val.." as an argument to --"..var..", use --"..var.."="..val..")." }
-               else
-                  if val == "" and vartype:sub(1,1) ~= '"' then
-                     return { ERROR = "Invalid argument: parameter to flag --"..var.."="..vartype.." cannot be empty." }
-                  end
-                  flags[var] = val
-               end
-            elseif vartype == true then
-               flags[var] = true
-            else
-               return { ERROR = "Invalid argument: unknown flag --"..var.."." }
-            end
+            flags[flag] = true
          end
-      else
-         table.insert(out, args[i])
+         table.remove(args, i)
       end
-      i = i + 1
    end
-   return flags, unpack(out)
+   return flags, unpack(args)
 end
 
--- Adds legacy 'run' function to a command module.
--- @param command table: command module with 'command' function,
--- the added 'run' function calls it after parseing command-line arguments.
-function util.add_run_function(command)
-   command.run = function(...) return command.command(util.parse_flags(...)) end
+--- Build a sequence of flags for forwarding from one command to
+-- another (for example, from "install" to "build").
+-- @param flags table: A table of parsed flags
+-- @param ... string...: A variable number of flags to be checked
+-- in the flags table. If no flags are passed as varargs, the
+-- entire flags table is forwarded.
+-- @return string... A variable number of strings
+function util.forward_flags(flags, ...)
+   assert(type(flags) == "table")
+   local out = {}
+   local filter = select('#', ...)
+   local function add_flag(flagname)
+      if flags[flagname] then
+         if flags[flagname] == true then
+            table.insert(out, "--"..flagname)
+         else
+            table.insert(out, "--"..flagname.."="..flags[flagname])
+         end
+      end
+   end
+   if filter > 0 then
+      for i = 1, filter do
+         add_flag(select(i, ...))
+      end
+   else
+      for flagname, _ in pairs(flags) do
+         add_flag(flagname)
+      end
+   end
+   return unpack(out)
 end
 
 --- Merges contents of src on top of dst's contents.
@@ -262,7 +177,7 @@ local var_format_pattern = "%$%((%a[%a%d_]+)%)"
 -- the original table (ie, does not copy recursively).
 -- @param tbl table: the input table
 -- @return table: a new table with the same contents.
-function util.make_shallow_copy(tbl)
+local function make_shallow_copy(tbl)
    local copy = {}
    for k,v in pairs(tbl) do
       copy[k] = v
@@ -281,7 +196,7 @@ end
 -- needed variables.
 -- @param msg string: the warning message to display.
 function util.warn_if_not_used(var_defs, needed_set, msg)
-   needed_set = util.make_shallow_copy(needed_set)
+   needed_set = make_shallow_copy(needed_set)
    for _, val in pairs(var_defs) do
       for used in val:gmatch(var_format_pattern) do
          needed_set[used] = nil
@@ -478,85 +393,6 @@ end
 
 function util.see_help(command, program)
    return "See '"..util.this_program(program or "luarocks")..' help'..(command and " "..command or "").."'."
-end
-
-function util.announce_install(rockspec)
-   local cfg = require("luarocks.cfg")
-   local path = require("luarocks.path")
-
-   local suffix = ""
-   if rockspec.description and rockspec.description.license then
-      suffix = " (license: "..rockspec.description.license..")"
-   end
-
-   local root_dir = path.root_dir(cfg.rocks_dir)
-   util.printout(rockspec.name.." "..rockspec.version.." is now installed in "..root_dir..suffix)
-   util.printout()
-end
-
---- Collect rockspecs located in a subdirectory.
--- @param versions table: A table mapping rock names to newest rockspec versions.
--- @param paths table: A table mapping rock names to newest rockspec paths.
--- @param unnamed_paths table: An array of rockspec paths that don't contain rock
--- name and version in regular format.
--- @param subdir string: path to subdirectory.
-local function collect_rockspecs(versions, paths, unnamed_paths, subdir)
-   local fs = require("luarocks.fs")
-   local dir = require("luarocks.dir")
-   local path = require("luarocks.path")
-   local deps = require("luarocks.deps")
-
-   if fs.is_dir(subdir) then
-      for file in fs.dir(subdir) do
-         file = dir.path(subdir, file)
-
-         if file:match("rockspec$") and fs.is_file(file) then
-            local rock, version = path.parse_name(file)
-
-            if rock then
-               if not versions[rock] or deps.compare_versions(version, versions[rock]) then
-                  versions[rock] = version
-                  paths[rock] = file
-               end
-            else
-               table.insert(unnamed_paths, file)
-            end
-         end
-      end
-   end
-end
-
---- Get default rockspec name for commands that take optional rockspec name.
--- @return string or (nil, string): path to the rockspec or nil and error message.
-function util.get_default_rockspec()
-   local versions, paths, unnamed_paths = {}, {}, {}
-   -- Look for rockspecs in some common locations.
-   collect_rockspecs(versions, paths, unnamed_paths, ".")
-   collect_rockspecs(versions, paths, unnamed_paths, "rockspec")
-   collect_rockspecs(versions, paths, unnamed_paths, "rockspecs")
-
-   if #unnamed_paths > 0 then
-      -- There are rockspecs not following "name-version.rockspec" format.
-      -- More than one are ambiguous.
-      if #unnamed_paths > 1 then
-         return nil, "Please specify which rockspec file to use."
-      else
-         return unnamed_paths[1]
-      end
-   else
-      local rock = next(versions)
-
-      if rock then
-         -- If there are rockspecs for multiple rocks it's ambiguous.
-         if next(versions, rock) then
-            return nil, "Please specify which rockspec file to use."
-         else
-            return paths[rock]
-         end
-      else
-         return nil, "Argument missing: please specify a rockspec to use on current directory."
-      end
-   end
 end
 
 -- from http://lua-users.org/wiki/SplitJoin

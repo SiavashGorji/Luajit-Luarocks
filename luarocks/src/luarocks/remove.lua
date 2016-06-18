@@ -1,6 +1,7 @@
 
 --- Module implementing the LuaRocks "remove" command.
 -- Uninstalls rocks.
+--module("luarocks.remove", package.seeall)
 local remove = {}
 package.loaded["luarocks.remove"] = remove
 
@@ -14,16 +15,15 @@ local cfg = require("luarocks.cfg")
 local manif = require("luarocks.manif")
 local fs = require("luarocks.fs")
 
-util.add_run_function(remove)
 remove.help_summary = "Uninstall a rock."
-remove.help_arguments = "[--force|--force-fast] <name> [<version>]"
+remove.help_arguments = "[--force[=fast]] <name> [<version>]"
 remove.help = [[
 Argument is the name of a rock to be uninstalled.
 If a version is not given, try to remove all versions at once.
 Will only perform the removal if it does not break dependencies.
 To override this check and force the removal, use --force.
 To perform a forced removal without reporting dependency issues,
-use --force-fast.
+use --force=fast.
 
 ]]..util.deps_mode_help()
 
@@ -74,22 +74,22 @@ local function delete_versions(name, versions)
    return true
 end
 
-function remove.remove_search_results(results, name, deps_mode, force, fast)
+function remove.remove_search_results(results, name, deps_mode, force) 
    local versions = results[name]
 
    local version = next(versions)
    local second = next(versions, version)
    
    local dependents = {}
-   if not fast then
-      util.printout("Checking stability of dependencies in the absence of")
+   if force ~= "fast" then
+      util.printout("Checking stability of dependencies on the absence of")
       util.printout(name.." "..table.concat(util.keys(versions), ", ").."...")
       util.printout()
       dependents = check_dependents(name, versions, deps_mode)
    end
    
    if #dependents > 0 then
-      if force or fast then
+      if force then
          util.printerr("The following packages may be broken by this forced removal:")
          for _, dependent in ipairs(dependents) do
             util.printerr(dependent.name.." "..dependent.version)
@@ -121,11 +121,11 @@ function remove.remove_search_results(results, name, deps_mode, force, fast)
    return true
 end
 
-function remove.remove_other_versions(name, version, force, fast)
+function remove.remove_other_versions(name, version, force)
    local results = {}
    search.manifest_search(results, cfg.rocks_dir, { name = name, exact_name = true, constraints = {{ op = "~=", version = version}} })
    if results[name] then
-      return remove.remove_search_results(results, name, cfg.deps_mode, force, fast)
+      return remove.remove_search_results(results, name, cfg.deps_mode, force)
    end
    return true
 end
@@ -137,9 +137,11 @@ end
 -- may also be given.
 -- @return boolean or (nil, string, exitcode): True if removal was
 -- successful, nil and an error message otherwise. exitcode is optionally returned.
-function remove.command(flags, name, version)
+function remove.run(...)
+   local flags, name, version = util.parse_flags(...)
+   
    if type(name) ~= "string" then
-      return nil, "Argument missing. "..util.see_help("remove")
+      return nil, "Argument missing, see help."
    end
    
    local deps_mode = flags["deps-mode"] or cfg.deps_mode
@@ -157,10 +159,10 @@ function remove.command(flags, name, version)
    local results = {}
    search.manifest_search(results, cfg.rocks_dir, search.make_query(name, version))
    if not results[name] then
-      return nil, "Could not find rock '"..name..(version and " "..version or "").."' in "..path.rocks_tree_to_string(cfg.root_dir)
+      return nil, "Could not find rock '"..name..(version and " "..version or "").."' in "..cfg.root_dir
    end
 
-   return remove.remove_search_results(results, name, deps_mode, flags["force"], flags["force-fast"])
+   return remove.remove_search_results(results, name, deps_mode, flags["force"])
 end
 
 return remove

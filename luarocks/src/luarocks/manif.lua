@@ -2,6 +2,7 @@
 -- Manifest files describe the contents of a LuaRocks tree or server.
 -- They are loaded into manifest tables, which are then used for
 -- performing searches, matching dependencies, etc.
+--module("luarocks.manif", package.seeall)
 local manif = {}
 package.loaded["luarocks.manif"] = manif
 
@@ -104,22 +105,18 @@ end
 -- All functions that use manifest tables assume they were obtained
 -- through either this function or load_local_manifest.
 -- @param repo_url string: URL or pathname for the repository.
--- @param lua_version string: Lua version in "5.x" format, defaults to installed version.
 -- @return table or (nil, string, [string]): A table representing the manifest,
 -- or nil followed by an error message and an optional error code.
-function manif.load_manifest(repo_url, lua_version)
+function manif.load_manifest(repo_url)
    assert(type(repo_url) == "string")
-   assert(type(lua_version) == "string" or not lua_version)
-   lua_version = lua_version or cfg.lua_version
 
-   local cached_manifest = manif_core.get_cached_manifest(repo_url, lua_version)
-   if cached_manifest then
-      return cached_manifest
+   if manif_core.manifest_cache[repo_url] then
+      return manif_core.manifest_cache[repo_url]
    end
-
+   
    local filenames = {
-      "manifest-"..lua_version..".zip",
-      "manifest-"..lua_version,
+      "manifest-"..cfg.lua_version..".zip",
+      "manifest-"..cfg.lua_version,
       "manifest",
    }
 
@@ -159,7 +156,7 @@ function manif.load_manifest(repo_url, lua_version)
       end
       pathname = nozip
    end
-   return manif_core.manifest_loader(pathname, repo_url, lua_version)
+   return manif_core.manifest_loader(pathname, repo_url)
 end
 
 --- Output a table listing items of a package.
@@ -384,7 +381,7 @@ function manif.make_manifest(repo, deps_mode, remote)
    local results = search.disk_search(repo, query)
    local manifest = { repository = {}, modules = {}, commands = {} }
 
-   manif_core.cache_manifest(repo, nil, manifest)
+   manif_core.manifest_cache[repo] = manifest
 
    local dep_handler = nil
    if not remote then
@@ -430,6 +427,8 @@ function manif.update_manifest(name, version, repo, deps_mode)
    assert(type(deps_mode) == "string")
    
    if deps_mode == "none" then deps_mode = cfg.deps_mode end
+
+   util.printout("Updating manifest for "..repo)
 
    local manifest, err = manif.load_manifest(repo)
    if not manifest then

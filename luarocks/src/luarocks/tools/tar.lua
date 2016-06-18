@@ -1,5 +1,6 @@
 
 --- A pure-Lua implementation of untar (unpacking .tar archives)
+--module("luarocks.tools.tar", package.seeall)
 local tar = {}
 
 local fs = require("luarocks.fs")
@@ -30,10 +31,9 @@ local function octal_to_number(octal)
    local number = 0
    for i = #octal,1,-1 do
       local digit = tonumber(octal:sub(i,i)) 
-      if digit then
-         number = number + (digit * 8^exp)
-         exp = exp + 1
-      end
+      if not digit then break end
+      number = number + (digit * 8^exp)
+      exp = exp + 1
    end
    return number
 end
@@ -143,7 +143,6 @@ function tar.untar(filename, destdir)
       util.printout()
       --]]
    end
-   tar_handle:close()
    return true
 end
 

@@ -2,7 +2,6 @@
 
 package.path = [[@CMAKE_INSTALL_PREFIX@/@INSTALL_LUA_PATH_SUBDIR@/?.lua;@CMAKE_INSTALL_PREFIX@/@INSTALL_LUA_PATH_SUBDIR@/?/init.lua;]]..package.path
 
-
 -- this should be loaded first.
 local cfg = require("luarocks.cfg")
 
@@ -30,7 +29,6 @@ commands = {
    purge = "luarocks.purge",
    doc = "luarocks.doc",
    upload = "luarocks.upload",
-   config = "luarocks.config_cmd",
 }
 
 command_line.run_command(...)

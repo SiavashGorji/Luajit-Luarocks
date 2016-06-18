@@ -10,15 +10,16 @@ local multipart = require("luarocks.upload.multipart")
 local Api = {}
 
 local function upload_config_file()
-   local conf = cfg.which_config()
-   if not conf.user.file then
+   local _, _, home_conf, home_ok = cfg.which_config()
+   if not home_conf then
       return nil
    end
-   return (conf.user.file:gsub("/[^/]+$", "/upload_config.lua"))
+   return (home_conf:gsub("/[^/]+$", "/upload_config.lua"))
 end
 
 function Api:load_config()
    local upload_conf = upload_config_file()
+   print(upload_conf)
    if not upload_conf then return nil end
    local cfg, err = persist.load_into_table(upload_conf)
    return cfg
@@ -106,27 +107,13 @@ end
 
 -- An ode to the multitude of JSON libraries out there...
 local function require_json()
-   local list = { "cjson", "dkjson", "json" }
-   for _, lib in ipairs(list) do
+   for _, lib in ipairs({ "cjson", "dkjson", "json" }) do
       local json_ok, json = pcall(require, lib)
       if json_ok then
          return json_ok, json
       end
    end
-   local errmsg = "Failed loading "
-   for i, name in ipairs(list) do
-      if i == #list then
-         errmsg = errmsg .."and '"..name.."'. Use 'luarocks search <partial-name>' to search for a library and 'luarocks install <name>' to install one."
-      else
-         errmsg = errmsg .."'"..name.."', "
-      end
-   end
-   return nil, errmsg
-end
-
-local function redact_api_url(url)
-   url = tostring(url)
-   return (url:gsub(".*/api/[^/]+/[^/]+", "")) or ""
+   return nil
 end
 
 local ltn12_ok, ltn12 = pcall(require, "ltn12")
@@ -135,12 +122,12 @@ if not ltn12_ok then -- If not using LuaSocket and/or LuaSec...
 function Api:request(url, params, post_params)
    local vars = cfg.variables
    local json_ok, json = require_json()
-   if not json_ok then return nil, "A JSON library is required for this command. "..json end
+   if not json_ok then return nil, "A JSON library is required for this command." end
    
    if cfg.downloader == "wget" then
-      local curl_ok, err = fs.is_tool_available(vars.CURL, "curl")
+      local curl_ok = fs.execute_quiet(vars.CURL, "--version")
       if not curl_ok then
-         return nil, err
+         return nil, "Missing network helper program 'curl'.\nMake sure 'curl' is installed and available from your path."
       end
    end
 
@@ -168,28 +155,25 @@ function Api:request(url, params, post_params)
       if cfg.connection_timeout and cfg.connection_timeout > 0 then
         curl_cmd = curl_cmd .. "--connect-timeout "..tonumber(cfg.connection_timeout).." " 
       end
-      local ok = fs.execute_string(curl_cmd..fs.Q(url).." -o "..fs.Q(tmpfile))
-      if not ok then
-         return nil, "API failure: " .. redact_api_url(url)
-      end
+      ok = fs.execute_string(curl_cmd..fs.Q(url).." -o "..fs.Q(tmpfile))
    else
       local ok, err = fs.download(url, tmpfile)
       if not ok then
-         return nil, "API failure: " .. tostring(err) .. " - " .. redact_api_url(url)
+         return nil, "API failure: " .. tostring(err) .. " - " .. tostring(url)
       end
    end
 
    local tmpfd = io.open(tmpfile)
    if not tmpfd then
       os.remove(tmpfile)
-      return nil, "API failure reading temporary file - " .. redact_api_url(url)
+      return nil, "API failure reading temporary file - " .. tostring(url)
    end
    out = tmpfd:read("*a")
    tmpfd:close()
    os.remove(tmpfile)
 
    if self.debug then
-      util.printout("[" .. tostring(method) .. " via curl] " .. redact_api_url(url) .. " ... ")
+      util.printout("[" .. tostring(method) .. " via curl] " .. tostring(url) .. " ... ")
    end
 
    return json.decode(out)
@@ -201,7 +185,7 @@ local warned_luasec = false
 
 function Api:request(url, params, post_params)
    local json_ok, json = require_json()
-   if not json_ok then return nil, "A JSON library is required for this command. "..json end
+   if not json_ok then return nil, "A JSON library is required for this command." end
    local server = tostring(self.config.server)
    local http_ok, http
    local via = "luasocket"
@@ -242,7 +226,7 @@ function Api:request(url, params, post_params)
    end
    local method = post_params and "POST" or "GET"
    if self.debug then
-      util.printout("[" .. tostring(method) .. " via "..via.."] " .. redact_api_url(url) .. " ... ")
+      util.printout("[" .. tostring(method) .. " via "..via.."] " .. tostring(url) .. " ... ")
    end
    local out = {}
    local _, status = http.request({
@@ -256,14 +240,14 @@ function Api:request(url, params, post_params)
       util.printout(tostring(status))
    end
    if status ~= 200 then
-      return nil, "API returned " .. tostring(status) .. " - " .. redact_api_url(url)
+      return nil, "API returned " .. tostring(status) .. " - " .. tostring(url)
    end
    return json.decode(table.concat(out))
 end
 
 end
 
-function api.new(flags)
+function api.new(flags, name)
    local self = {}
    setmetatable(self, { __index = Api })
    self.config = self:load_config() or {}

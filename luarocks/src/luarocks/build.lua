@@ -1,6 +1,7 @@
 
 --- Module implementing the LuaRocks "build" command.
 -- Builds a rock, compiling its C parts if any.
+--module("luarocks.build", package.seeall)
 local build = {}
 package.loaded["luarocks.build"] = build
 
@@ -16,7 +17,6 @@ local manif = require("luarocks.manif")
 local remove = require("luarocks.remove")
 local cfg = require("luarocks.cfg")
 
-util.add_run_function(build)
 build.help_summary = "Build/compile a rock."
 build.help_arguments = "[--pack-binary-rock] [--keep] {<rockspec>|<rock>|<name> [<version>]}"
 build.help = [[
@@ -37,8 +37,6 @@ or the name of a rock to be fetched from a repository.
                     rockspec. Allows to specify a different branch to 
                     fetch. Particularly for SCM rocks.
 
---only-deps         Installs only the dependencies of the rock.
-
 ]]..util.deps_mode_help()
 
 --- Install files to a given location.
@@ -53,11 +51,9 @@ or the name of a rock to be fetched from a repository.
 -- @param location string: The base directory files should be copied to.
 -- @param is_module_path boolean: True if string keys in files should be
 -- interpreted as dotted module paths.
--- @param perms string: Permissions of the newly created files installed.
--- Directories are always created with the default permissions.
 -- @return boolean or (nil, string): True if succeeded or 
 -- nil and an error message.
-local function install_files(files, location, is_module_path, perms)
+local function install_files(files, location, is_module_path)
    assert(type(files) == "table" or not files)
    assert(type(location) == "string")
    if files then
@@ -87,7 +83,7 @@ local function install_files(files, location, is_module_path, perms)
             local ok, err = fs.make_dir(dest)
             if not ok then return nil, err end
          end
-         local ok = fs.copy(dir.path(file), dir.path(dest, filename), perms)
+         local ok = fs.copy(dir.path(file), dir.path(dest, filename))
          if not ok then
             return nil, "Failed copying "..file
          end
@@ -134,17 +130,17 @@ function build.apply_patches(rockspec)
 end
 
 local function install_default_docs(name, version)
-   local patterns = { "readme", "license", "copying", ".*%.md" }
+   local patterns = { "readme", "license", "copying" }
    local dest = dir.path(path.install_dir(name, version), "doc")
    local has_dir = false
-   for file in fs.dir() do
+   for name in fs.dir() do
       for _, pattern in ipairs(patterns) do
-         if file:lower():match("^"..pattern) then
+         if name:lower():match("^"..pattern) then
             if not has_dir then
                fs.make_dir(dest)
                has_dir = true
             end
-            fs.copy(file, dest, cfg.perm_read)
+            fs.copy(name, dest)
             break
          end
       end
@@ -161,10 +157,9 @@ end
 -- @param deps_mode string: Dependency mode: "one" for the current default tree,
 -- "all" for all trees, "order" for all trees with priority >= the current default,
 -- "none" for no trees.
--- @param build_only_deps boolean: true to build the listed dependencies only.
 -- @return (string, string) or (nil, string, [string]): Name and version of
 -- installed rock if succeeded or nil and an error message followed by an error code.
-function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_mode, build_only_deps)
+function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_mode)
    assert(type(rockspec_file) == "string")
    assert(type(need_to_fetch) == "boolean")
 
@@ -177,14 +172,6 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
       return nil, "Rockspec error: build type not specified"
    end
 
-   local ok
-   if not build_only_deps then
-      ok, err, errcode = deps.check_external_deps(rockspec, "build")
-      if err then
-         return nil, err, errcode
-      end
-   end
-
    if deps_mode == "none" then
       util.printerr("Warning: skipping dependency checks.")
    else
@@ -194,13 +181,12 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
       end
    end
 
-   local name, version = rockspec.name, rockspec.version
-   if build_only_deps then
-      util.printout("Stopping after installing dependencies for " ..name.." "..version)
-      util.printout()
-      return name, version
-   end   
+   local ok, err, errcode = deps.check_external_deps(rockspec, "build")
+   if err then
+      return nil, err, errcode
+   end
 
+   local name, version = rockspec.name, rockspec.version
    if repos.is_installed(name, version) then
       repos.delete_version(name, version)
    end
@@ -224,10 +210,10 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
    end
    
    local dirs = {
-      lua = { name = path.lua_dir(name, version), is_module_path = true, perms = cfg.perm_read },
-      lib = { name = path.lib_dir(name, version), is_module_path = true, perms = cfg.perm_exec },
-      conf = { name = path.conf_dir(name, version), is_module_path = false, perms = cfg.perm_read },
-      bin = { name = path.bin_dir(name, version), is_module_path = false, perms = cfg.perm_exec },
+      lua = { name = path.lua_dir(name, version), is_module_path = true },
+      lib = { name = path.lib_dir(name, version), is_module_path = true },
+      conf = { name = path.conf_dir(name, version), is_module_path = false },
+      bin = { name = path.bin_dir(name, version), is_module_path = false },
    }
    
    for _, d in pairs(dirs) do
@@ -274,7 +260,7 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
 
    if build_spec.install then
       for id, install_dir in pairs(dirs) do
-         ok, err = install_files(build_spec.install[id], install_dir.name, install_dir.is_module_path, install_dir.perms)
+         ok, err = install_files(build_spec.install[id], install_dir.name, install_dir.is_module_path)
          if not ok then 
             return nil, err
          end
@@ -312,7 +298,7 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
 
    fs.pop_dir()
    
-   fs.copy(rockspec.local_filename, path.rockspec_file(name, version), cfg.perm_read)
+   fs.copy(rockspec.local_filename, path.rockspec_file(name, version))
    if need_to_fetch then
       fs.pop_dir()
    end
@@ -334,7 +320,15 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
    ok, err = manif.update_manifest(name, version, nil, deps_mode)
    if err then return nil, err end
 
-   util.announce_install(rockspec)
+   local license = ""
+   if rockspec.description and rockspec.description.license then
+      license = ("(license: "..rockspec.description.license..")")
+   end
+
+   local root_dir = path.root_dir(cfg.rocks_dir)
+   util.printout(name.." "..version.." is now built and installed in "..root_dir.." "..license)
+   util.printout()
+   
    util.remove_scheduled_function(rollback)
    return name, version
 end
@@ -346,41 +340,37 @@ end
 -- @param deps_mode: string: Which trees to check dependencies for:
 -- "one" for the current default tree, "all" for all trees,
 -- "order" for all trees with priority >= the current default, "none" for no trees.
--- @param build_only_deps boolean: true to build the listed dependencies only.
 -- @return boolean or (nil, string, [string]): True if build was successful,
 -- or false and an error message and an optional error code.
-function build.build_rock(rock_file, need_to_fetch, deps_mode, build_only_deps)
+function build.build_rock(rock_file, need_to_fetch, deps_mode)
    assert(type(rock_file) == "string")
    assert(type(need_to_fetch) == "boolean")
-
-   local ok, err, errcode
-   local unpack_dir
-   unpack_dir, err, errcode = fetch.fetch_and_unpack_rock(rock_file)
+  
+   local unpack_dir, err, errcode = fetch.fetch_and_unpack_rock(rock_file)
    if not unpack_dir then
       return nil, err, errcode
    end
    local rockspec_file = path.rockspec_name_from_rock(rock_file)
-   ok, err = fs.change_dir(unpack_dir)
+   local ok, err = fs.change_dir(unpack_dir)
    if not ok then return nil, err end
-   ok, err, errcode = build.build_rockspec(rockspec_file, need_to_fetch, false, deps_mode, build_only_deps)
+   local ok, err, errcode = build.build_rockspec(rockspec_file, need_to_fetch, false, deps_mode)
    fs.pop_dir()
    return ok, err, errcode
 end
  
-local function do_build(name, version, deps_mode, build_only_deps)
+local function do_build(name, version, deps_mode)
    if name:match("%.rockspec$") then
-      return build.build_rockspec(name, true, false, deps_mode, build_only_deps)
+      return build.build_rockspec(name, true, false, deps_mode)
    elseif name:match("%.src%.rock$") then
-      return build.build_rock(name, false, deps_mode, build_only_deps)
+      return build.build_rock(name, false, deps_mode)
    elseif name:match("%.all%.rock$") then
       local install = require("luarocks.install")
-      local install_fun = build_only_deps and install.install_binary_rock_deps or install.install_binary_rock
-      return install_fun(name, deps_mode)
+      return install.install_binary_rock(name, deps_mode)
    elseif name:match("%.rock$") then
-      return build.build_rock(name, true, deps_mode, build_only_deps)
+      return build.build_rock(name, true, deps_mode)
    elseif not name:match(dir.separator) then
       local search = require("luarocks.search")
-      return search.act_on_src_or_rockspec(do_build, name:lower(), version, nil, deps_mode, build_only_deps)
+      return search.act_on_src_or_rockspec(build.run, name:lower(), version, deps.deps_mode_to_flag(deps_mode))
    end
    return nil, "Don't know what to do with "..name
 end
@@ -393,7 +383,8 @@ end
 -- also be given.
 -- @return boolean or (nil, string, exitcode): True if build was successful; nil and an
 -- error message otherwise. exitcode is optionally returned.
-function build.command(flags, name, version)
+function build.run(...)
+   local flags, name, version = util.parse_flags(...)
    if type(name) ~= "string" then
       return nil, "Argument missing. "..util.see_help("build")
    end
@@ -404,14 +395,11 @@ function build.command(flags, name, version)
    else
       local ok, err = fs.check_command_permissions(flags)
       if not ok then return nil, err, cfg.errorcodes.PERMISSIONDENIED end
-      ok, err = do_build(name, version, deps.get_deps_mode(flags), flags["only-deps"])
+      ok, err = do_build(name, version, deps.get_deps_mode(flags))
       if not ok then return nil, err end
       local name, version = ok, err
-      if flags["only-deps"] then
-         return name, version
-      end
       if (not flags["keep"]) and not cfg.keep_other_versions then
-         local ok, err = remove.remove_other_versions(name, version, flags["force"], flags["force-fast"])
+         local ok, err = remove.remove_other_versions(name, version, flags["force"])
          if not ok then util.printerr(err) end
       end
       return name, version

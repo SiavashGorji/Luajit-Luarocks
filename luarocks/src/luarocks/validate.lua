@@ -1,5 +1,6 @@
 
 --- Sandboxed test of build/install of all packages in a repository (unfinished and disabled).
+--module("luarocks.validate", package.seeall)
 local validate = {}
 package.loaded["luarocks.validate"] = validate
 
@@ -11,7 +12,6 @@ local build = require("luarocks.build")
 local install = require("luarocks.install")
 local util = require("luarocks.util")
 
-util.add_run_function(validate)
 validate.help_summary = "Sandboxed test of build/install of all packages in a repository."
 
 validate.help = [[
@@ -75,7 +75,8 @@ local function validate_rock(file)
    return ok, err, errcode
 end
 
-function validate.command(flags, repo)
+function validate.run(...)
+   local flags, repo = util.parse_flags(...)
    repo = repo or cfg.rocks_dir
 
    util.printout("Verifying contents of "..repo)

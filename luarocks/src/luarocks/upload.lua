@@ -7,7 +7,6 @@ local pack = require("luarocks.pack")
 local cfg = require("luarocks.cfg")
 local Api = require("luarocks.upload.api")
 
-util.add_run_function(upload)
 upload.help_summary = "Upload a rockspec to the public rocks repository."
 upload.help_arguments = "[--skip-pack] [--api-key=<key>] [--force] <rockspec>"
 upload.help = [[
@@ -21,7 +20,8 @@ upload.help = [[
                  increment the revision number instead.
 ]]
 
-function upload.command(flags, fname)
+function upload.run(...)
+   local flags, fname = util.parse_flags(...)
    if not fname then
       return nil, "Missing rockspec. "..util.see_help("upload")
    end
@@ -54,7 +54,7 @@ function upload.command(flags, fname)
    end
 
    local rock_fname
-   if not flags["skip-pack"] and not rockspec.version:match("^scm") then
+   if not flags["skip-pack"] then
       util.printout("Packing " .. tostring(rockspec.package))
       rock_fname, err = pack.pack_source_rock(fname)
       if not rock_fname then
@@ -77,7 +77,7 @@ function upload.command(flags, fname)
    
    if rock_fname then
       util.printout(("Sending " .. tostring(rock_fname) .. " ..."))
-      res, err = api:method("upload_rock/" .. ("%d"):format(res.version.id), nil, {
+      res, err = api:method("upload_rock/" .. tostring(res.version.id), nil, {
          rock_file = multipart.new_file(rock_fname)
       })
       if not res then return nil, err end

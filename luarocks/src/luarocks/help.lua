@@ -4,6 +4,7 @@
 -- uses a global table called "commands" to find commands
 -- to show help for; each command should be represented by a
 -- table containing "help" and "help_summary" fields.
+--module("luarocks.help", package.seeall)
 local help = {}
 
 local util = require("luarocks.util")
@@ -12,7 +13,6 @@ local dir = require("luarocks.dir")
 
 local program = util.this_program("luarocks")
 
-util.add_run_function(help)
 help.help_summary = "Help on commands. Type '"..program.." help <command>' for more."
 
 help.help_arguments = "[<command>]"
@@ -31,8 +31,10 @@ end
 local function get_status(status)
    if status then
       return "ok"
-   else
+   elseif status == false then
       return "not found"
+   else
+      return "failed"
    end
 end
 
@@ -41,9 +43,11 @@ end
 -- given, help summaries for all commands are shown.
 -- @return boolean or (nil, string): true if there were no errors
 -- or nil and an error message if an invalid command was requested.
-function help.command(flags, command)
+function help.run(...)
+   local flags, command = util.parse_flags(...)
+
    if not command then
-      local conf = cfg.which_config()
+      local sys_file, sys_ok, home_file, home_ok = cfg.which_config()
       print_banner()
       print_section("NAME")
       util.printout("\t"..program..[[ - ]]..program_description)
@@ -79,9 +83,9 @@ function help.command(flags, command)
       print_section("CONFIGURATION")
       util.printout("\tLua version: " .. cfg.lua_version)
       util.printout("\tConfiguration files:")
-      util.printout("\t\tSystem: ".. dir.normalize(conf.system.file) .. " (" .. get_status(conf.system.ok) ..")")
-      if conf.user.file then
-         util.printout("\t\tUser  : ".. dir.normalize(conf.user.file) .. " (" .. get_status(conf.user.ok) ..")\n")
+      util.printout("\t\tSystem: ".. dir.normalize(sys_file) .. " (" .. get_status(sys_ok) ..")")
+      if home_file then
+         util.printout("\t\tUser  : ".. dir.normalize(home_file) .. " (" .. get_status(home_ok) ..")\n")
       else
          util.printout("\t\tUser  : disabled in this LuaRocks installation.\n")
       end
@@ -96,7 +100,7 @@ function help.command(flags, command)
       end
    else
       command = command:gsub("-", "_")
-      local cmd = commands[command] and require(commands[command])
+      local cmd = require(commands[command])
       if cmd then
          local arguments = cmd.help_arguments or "<argument>"
          print_banner()
@@ -109,7 +113,7 @@ function help.command(flags, command)
          print_section("SEE ALSO")
          util.printout("","'"..program.." help' for general options and configuration.\n")
       else
-         return nil, "Unknown command: "..command
+         return nil, "Unknown command '"..command.."'"
       end
    end
    return true

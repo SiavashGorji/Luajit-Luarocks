@@ -1,5 +1,6 @@
 
 --- A builtin build system: back-end to provide a portable way of building C-based Lua modules.
+--module("luarocks.build.builtin", package.seeall)
 local builtin = {}
 
 local unpack = unpack or table.unpack
@@ -73,7 +74,7 @@ function builtin.run(rockspec)
          add_flags(extras, "-I%s", incdirs)
          return execute(variables.CC.." "..variables.CFLAGS, "-c", "-o", object, "-I"..variables.LUA_INCDIR, source, unpack(extras))
       end
-      compile_library = function(library, objects, libraries, libdirs)
+      compile_library = function(library, objects, libraries, libdirs, name)
          local extras = { unpack(objects) }
          add_flags(extras, "-L%s", libdirs)
          add_flags(extras, "-l%s", libraries)
@@ -98,7 +99,7 @@ function builtin.run(rockspec)
                       "-l" .. (variables.MSVCRT or "m"), "-luser32")
          return ok, wrapname
       end
-   elseif cfg.is_platform("win32") then
+   elseif cfg.is_platform("win32") or cfg.is_platform('x64') then
       compile_object = function(object, source, defines, incdirs)
          local extras = {}
          add_flags(extras, "-D%s", defines)
@@ -115,7 +116,8 @@ function builtin.run(rockspec)
          def:write("EXPORTS\n")
          def:write("luaopen_"..name:gsub("%.", "_").."\n")
          def:close()
-         local ok = execute(variables.LD, "-dll", "-def:"..deffile, "-out:"..library, dir.path(variables.LUA_LIBDIR, variables.LUALIB), unpack(extras))
+         -- diz --- local ok = execute(variables.LD, "-dll", "-def:"..deffile, "-out:"..library, dir.path(variables.LUA_LIBDIR, variables.LUALIB), unpack(extras))
+         local ok = execute(variables.LD, "-dll", "-out:"..library, dir.path(variables.LUA_LIBDIR, variables.LUALIB), unpack(extras))
          local basedir = ""
          if name:find("%.") ~= nil then
             basedir = name:gsub("%.%w+$", "\\")
@@ -126,6 +128,7 @@ function builtin.run(rockspec)
          if ok and fs.exists(manifestfile) then
             ok = execute(variables.MT, "-manifest", manifestfile, "-outputresource:"..basedir..basename..".dll;2")
          end
+	 --- diz --- io.read()
          return ok
       end
       compile_wrapper_binary = function(fullname, name)
@@ -137,7 +140,7 @@ function builtin.run(rockspec)
          local resname = basename..".res"
          local wrapname = basename..".exe"
          make_rc(fullname, fullbasename..".rc")
-         local ok = execute(variables.RC, "-nologo", "-r", "-fo"..resname, rcname)
+         local ok = execute(variables.RC, "-r", "-fo"..resname, rcname)
          if not ok then return ok end
          ok = execute(variables.CC.." "..variables.CFLAGS, "-c", "-Fo"..object,
                       "-I"..variables.LUA_INCDIR, variables.WRAPPER)
@@ -169,13 +172,12 @@ function builtin.run(rockspec)
          end
          return execute(variables.LD.." "..variables.LIBFLAG, "-o", library, "-L"..variables.LUA_LIBDIR, unpack(extras))
       end
-      compile_wrapper_binary = function(_, name) return true, name end
+      compile_wrapper_binary = function(fullname, name) return true, name end
       --TODO EXEWRAPPER
    end
 
-   local ok, err
-   local lua_modules = {}
-   local lib_modules = {}
+   local ok = true
+   local built_modules = {}
    local luadir = path.lua_dir(rockspec.name, rockspec.version)
    local libdir = path.lib_dir(rockspec.name, rockspec.version)
    --TODO EXEWRAPPER
@@ -196,13 +198,11 @@ function builtin.run(rockspec)
      end
    end
    
-   if not build.modules then
-      return nil, "Missing build.modules table"
-   end
+   
    for name, info in pairs(build.modules) do
       local moddir = path.module_to_path(name)
       if type(info) == "string" then
-         local ext = info:match("%.([^.]+)$")
+         local ext = info:match(".([^.]+)$")
          if ext == "lua" then
             local filename = dir.base_name(info)
             if info:match("init%.lua$") and not name:match("%.init$") then
@@ -215,7 +215,7 @@ function builtin.run(rockspec)
                end
             end
             local dest = dir.path(luadir, moddir, filename)
-            lua_modules[info] = dest
+            built_modules[info] = dest
          else
             info = {info}
          end
@@ -226,7 +226,7 @@ function builtin.run(rockspec)
          if info[1] then sources = info end
          if type(sources) == "string" then sources = {sources} end
          for _, source in ipairs(sources) do
-            local object = source:gsub("%.[^.]*$", "."..cfg.obj_extension)
+            local object = source:gsub(".[^.]*$", "."..cfg.obj_extension)
             if not object then
                object = source.."."..cfg.obj_extension
             end
@@ -236,30 +236,29 @@ function builtin.run(rockspec)
             end
             table.insert(objects, object)
          end
+         if not ok then break end
          local module_name = name:match("([^.]*)$").."."..util.matchquote(cfg.lib_extension)
          if moddir ~= "" then
             module_name = dir.path(moddir, module_name)
-            ok, err = fs.make_dir(moddir)
+            local ok, err = fs.make_dir(moddir)
             if not ok then return nil, err end
          end
-         lib_modules[module_name] = dir.path(libdir, module_name)
+         built_modules[module_name] = dir.path(libdir, module_name)
          ok = compile_library(module_name, objects, info.libraries, info.libdirs, name)
          if not ok then
             return nil, "Failed compiling module "..module_name
          end
       end
    end
-   for _, mods in ipairs({{ tbl = lua_modules, perms = cfg.perm_read }, { tbl = lib_modules, perms = cfg.perm_exec }}) do
-      for name, dest in pairs(mods.tbl) do
-         fs.make_dir(dir.dir_name(dest))
-         ok, err = fs.copy(name, dest, mods.perms)
-         if not ok then
-            return nil, "Failed installing "..name.." in "..dest..": "..err
-         end
+   for name, dest in pairs(built_modules) do
+      fs.make_dir(dir.dir_name(dest))
+      ok = fs.copy(name, dest)
+      if not ok then
+         return nil, "Failed installing "..name.." in "..dest
       end
    end
    if fs.is_dir("lua") then
-      ok, err = fs.copy_contents("lua", luadir)
+      local ok, err = fs.copy_contents("lua", luadir)
       if not ok then
          return nil, "Failed copying contents of 'lua' directory: "..err
       end
