@@ -7,6 +7,7 @@ This repository is forked from [torch/luajit-rocks](https://github.com/torch/lua
 
 # Current Module Versions
 [LuaJIT](https://github.com/LuaJIT/LuaJIT/tree/v2.1) 2.1.0-beta2
+
 [luarocks](https://github.com/keplerproject/luarocks) 2.2.0-beta1
 
 # Pre-requisites
