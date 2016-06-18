@@ -319,18 +319,8 @@ target_link_libraries (libluajit ${LIBS} )
 SET_TARGET_PROPERTIES(libluajit PROPERTIES
   PREFIX "lib" IMPORT_PREFIX "lib" OUTPUT_NAME "luajit")
 
-IF(WIN32)
-  add_executable(luajit src/luajit.c)
-  target_link_libraries(luajit libluajit)
-ELSE()
-  IF(WITH_AMALG)
-    add_executable(luajit src/luajit.c src/ljamalg.c ${DEPS})
-  ELSE()
-    add_executable(luajit src/luajit.c ${SRC_LJCORE} ${DEPS})
-  ENDIF()
-  target_link_libraries(luajit ${LIBS})
-  SET_TARGET_PROPERTIES(luajit PROPERTIES ENABLE_EXPORTS ON)
-ENDIF()
+add_executable(luajit src/luajit.c)
+target_link_libraries(luajit libluajit)
 
 INSTALL(TARGETS libluajit luajit
   EXPORT torch-exports
