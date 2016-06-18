@@ -34,7 +34,7 @@ end
 
 cfg.site_config = site_config
 
-cfg.program_version = "2.2.0"
+cfg.program_version = "2.2.0beta1"
 cfg.major_version = cfg.program_version:match("([^.]%.[^.])")
 
 local persist = require("luarocks.persist")
@@ -215,10 +215,8 @@ local defaults = {
 
    rocks_servers = {
       {
-        "https://rocks.moonscript.org",
-        "https://raw.githubusercontent.com/rocks-moonscript-org/moonrocks-mirror/master/",
-        "http://luafr.org/moonrocks/",
-        "http://luarocks.logiceditor.com/rocks",
+        "https://raw.githubusercontent.com/torch/rocks/master",
+        "https://raw.githubusercontent.com/rocks-moonscript-org/moonrocks-mirror/master"
       }
    },
    disabled_servers = {},
@@ -295,13 +293,13 @@ local defaults = {
 }
 
 if detected.windows then
-   local full_prefix = site_config.LUAROCKS_PREFIX.."\\"..cfg.major_version
+   local full_prefix = site_config.LUAROCKS_PREFIX --.."\\"..cfg.major_version
    extra_luarocks_module_dir = full_prefix.."\\lua\\?.lua"
 
    home_config_file = home_config_file and home_config_file:gsub("\\","/")
    defaults.fs_use_modules = false
-   defaults.arch = "win32-"..proc
-   defaults.platforms = {"win32", "windows" }
+   defaults.arch = "x64-"..proc
+   defaults.platforms = {"x64", "windows" }
    defaults.lib_extension = "dll"
    defaults.external_lib_extension = "dll"
    defaults.obj_extension = "obj"
@@ -309,8 +307,8 @@ if detected.windows then
    defaults.variables.LUA_BINDIR = site_config.LUA_BINDIR and site_config.LUA_BINDIR:gsub("\\", "/") or "c:/lua"..cfg.lua_version.."/bin"
    defaults.variables.LUA_INCDIR = site_config.LUA_INCDIR and site_config.LUA_INCDIR:gsub("\\", "/") or "c:/lua"..cfg.lua_version.."/include"
    defaults.variables.LUA_LIBDIR = site_config.LUA_LIBDIR and site_config.LUA_LIBDIR:gsub("\\", "/") or "c:/lua"..cfg.lua_version.."/lib"
-   defaults.cmake_generator = "MinGW Makefiles"
-   defaults.makefile = "Makefile.win"
+   defaults.cmake_generator = "NMake Makefiles"
+   defaults.makefile = "Makefile"
    defaults.variables.MAKE = "nmake"
    defaults.variables.CC = "cl"
    defaults.variables.RC = "rc"
@@ -325,7 +323,7 @@ if detected.windows then
       "MKDIR", "MV", "PWD", "RMDIR", "TEST", "UNAME", "WGET" }
    for _, var in ipairs(bins) do
       if defaults.variables[var] then
-         defaults.variables[var] = full_prefix.."\\tools\\"..defaults.variables[var]
+         defaults.variables[var] = full_prefix..defaults.variables[var]
       end
    end
 
