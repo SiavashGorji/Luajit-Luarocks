@@ -14,6 +14,7 @@ Install [CMake](http://cmake.org), [Git](https://git-scm.com/), and a version of
 # Installation
 Choose a destination directory, preferably a short path with no spaces (e.g. C:\Programs\).
 During all the following steps, we use the Visual Studio Native Tools Command Prompt, which is a command prompt with appropriate environment variables set. You can locate it inside C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts for VS2013, and C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\Tools\Shortcuts for VS2015.
+
 I recommend using the 64-bit Native Tools (e.g. VS2013 x64 Native Tools Command Prompt or VS2015 x64 Native Tools Command Prompt). For the rest of this guide, we refer to it by VSNT.
 
 ## 1. luaJIT and luarocks
