@@ -133,14 +133,14 @@ local function install_default_docs(name, version)
    local patterns = { "readme", "license", "copying" }
    local dest = dir.path(path.install_dir(name, version), "doc")
    local has_dir = false
-   for file in fs.dir() do
+   for name in fs.dir() do
       for _, pattern in ipairs(patterns) do
-         if file:lower():match("^"..pattern) then
+         if name:lower():match("^"..pattern) then
             if not has_dir then
                fs.make_dir(dest)
                has_dir = true
             end
-            fs.copy(file, dest)
+            fs.copy(name, dest)
             break
          end
       end
@@ -181,8 +181,7 @@ function build.build_rockspec(rockspec_file, need_to_fetch, minimal_mode, deps_m
       end
    end
 
-   local ok
-   ok, err, errcode = deps.check_external_deps(rockspec, "build")
+   local ok, err, errcode = deps.check_external_deps(rockspec, "build")
    if err then
       return nil, err, errcode
    end
@@ -346,17 +345,15 @@ end
 function build.build_rock(rock_file, need_to_fetch, deps_mode)
    assert(type(rock_file) == "string")
    assert(type(need_to_fetch) == "boolean")
-
-   local ok, err, errcode
-   local unpack_dir
-   unpack_dir, err, errcode = fetch.fetch_and_unpack_rock(rock_file)
+  
+   local unpack_dir, err, errcode = fetch.fetch_and_unpack_rock(rock_file)
    if not unpack_dir then
       return nil, err, errcode
    end
    local rockspec_file = path.rockspec_name_from_rock(rock_file)
-   ok, err = fs.change_dir(unpack_dir)
+   local ok, err = fs.change_dir(unpack_dir)
    if not ok then return nil, err end
-   ok, err, errcode = build.build_rockspec(rockspec_file, need_to_fetch, false, deps_mode)
+   local ok, err, errcode = build.build_rockspec(rockspec_file, need_to_fetch, false, deps_mode)
    fs.pop_dir()
    return ok, err, errcode
 end

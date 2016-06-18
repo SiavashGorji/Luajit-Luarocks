@@ -21,7 +21,7 @@ local function die(message, exitcode)
 
    local ok, err = pcall(util.run_scheduled_functions)
    if not ok then
-      util.printerr("\nLuaRocks "..cfg.program_version.." internal bug (please report at https://github.com/keplerproject/luarocks/issues):\n"..err)
+      util.printerr("\nLuaRocks "..cfg.program_version.." internal bug (please report at luarocks-developers@lists.sourceforge.net):\n"..err)
    end
    util.printerr("\nError: "..message)
    os.exit(exitcode or cfg.errorcodes.UNSPECIFIED)
@@ -208,7 +208,7 @@ function command_line.run_command(...)
       local xp, ok, err, exitcode = xpcall(function() return cmd.run(unpack(args)) end, function(err)
          die(debug.traceback("LuaRocks "..cfg.program_version
             .." bug (please report at luarocks-developers@lists.sourceforge.net).\n"
-            ..err, 2), cfg.errorcodes.CRASH)
+            ..err, 2))
       end)
       if xp and (not ok) then
          die(err, exitcode)

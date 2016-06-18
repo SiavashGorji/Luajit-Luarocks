@@ -155,10 +155,7 @@ function Api:request(url, params, post_params)
       if cfg.connection_timeout and cfg.connection_timeout > 0 then
         curl_cmd = curl_cmd .. "--connect-timeout "..tonumber(cfg.connection_timeout).." " 
       end
-      local ok = fs.execute_string(curl_cmd..fs.Q(url).." -o "..fs.Q(tmpfile))
-      if not ok then
-         return nil, "API failure: " .. tostring(url)
-      end
+      ok = fs.execute_string(curl_cmd..fs.Q(url).." -o "..fs.Q(tmpfile))
    else
       local ok, err = fs.download(url, tmpfile)
       if not ok then

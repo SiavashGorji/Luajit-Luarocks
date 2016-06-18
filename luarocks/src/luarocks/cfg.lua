@@ -34,9 +34,8 @@ end
 
 cfg.site_config = site_config
 
-cfg.program_version = "2.2.1"
-cfg.program_series = "2.2"
-cfg.major_version = (cfg.program_version:match("([^.]%.[^.])")) or cfg.program_series
+cfg.program_version = "2.2.0"
+cfg.major_version = cfg.program_version:match("([^.]%.[^.])")
 
 local persist = require("luarocks.persist")
 
@@ -44,8 +43,6 @@ cfg.errorcodes = setmetatable({
    OK = 0,
    UNSPECIFIED = 1,
    PERMISSIONDENIED = 2,
-   CONFIGFILE = 3,
-   CRASH = 99
 },{
    __index = function(t, key)
       local val = rawget(t, key)
@@ -146,29 +143,28 @@ cfg.variables = {}
 cfg.rocks_trees = {}
 
 sys_config_file = site_config.LUAROCKS_SYSCONFIG or sys_config_dir.."/config-"..cfg.lua_version..".lua"
-local err, errcode
-sys_config_ok, err, errcode = persist.load_into_table(sys_config_file, cfg)
+local err
+sys_config_ok, err = persist.load_into_table(sys_config_file, cfg)
 
-if (not sys_config_ok) and errcode ~= "run" then
+if not sys_config_ok then
    sys_config_file = sys_config_dir.."/config.lua"
-   sys_config_ok, err, errcode = persist.load_into_table(sys_config_file, cfg)
+   sys_config_ok, err = persist.load_into_table(sys_config_file, cfg)
 end
-if (not sys_config_ok) and errcode ~= "open" then
+if err and sys_config_ok == nil then
    io.stderr:write(err.."\n")
-   os.exit(cfg.errorcodes.CONFIGFILE)
 end
 
 if not site_config.LUAROCKS_FORCE_CONFIG then
-   local home_overrides, err, errcode
+   local home_overrides, err
    home_config_file = os.getenv("LUAROCKS_CONFIG_" .. version_suffix) or os.getenv("LUAROCKS_CONFIG")
    if home_config_file then
-      home_overrides, err, errcode = persist.load_into_table(home_config_file, { home = cfg.home, lua_version = cfg.lua_version })
+      home_overrides, err = persist.load_into_table(home_config_file, { home = cfg.home, lua_version = cfg.lua_version })
    else
       home_config_file = home_config_dir.."/config-"..cfg.lua_version..".lua"
-      home_overrides, err, errcode = persist.load_into_table(home_config_file, { home = cfg.home, lua_version = cfg.lua_version })
-      if (not home_overrides) and (not errcode == "run") then
+      home_overrides, err = persist.load_into_table(home_config_file, { home = cfg.home, lua_version = cfg.lua_version })
+      if not home_overrides then
          home_config_file = home_config_dir.."/config.lua"
-         home_overrides, err, errcode = persist.load_into_table(home_config_file, { home = cfg.home, lua_version = cfg.lua_version })
+         home_overrides, err = persist.load_into_table(home_config_file, { home = cfg.home, lua_version = cfg.lua_version })
       end
    end
    if home_overrides then
@@ -180,11 +176,10 @@ if not site_config.LUAROCKS_FORCE_CONFIG then
          cfg.rocks_servers = nil
       end
       util.deep_merge(cfg, home_overrides)
-   else
+   else -- nil or false
       home_config_ok = home_overrides
-      if errcode ~= "open" then
+      if err and home_config_ok == nil then
          io.stderr:write(err.."\n")
-         os.exit(cfg.errorcodes.CONFIGFILE)
       end
    end
 end
@@ -200,6 +195,7 @@ end
 
 -- Configure defaults:
 
+local root = cfg.rocks_trees[#cfg.rocks_trees]
 local defaults = {
 
    local_by_default = false,
@@ -208,7 +204,6 @@ local defaults = {
    fs_use_modules = true,
    hooks_enabled = true,
    deps_mode = "one",
-   check_certificates = false,
 
    lua_modules_path = "/share/lua/"..cfg.lua_version,
    lib_modules_path = "/lib/lua/"..cfg.lua_version,
@@ -230,7 +225,7 @@ local defaults = {
    
    upload = {
       server = "https://rocks.moonscript.org",
-      tool_version = "1.0.0",
+      tool_version = "0.0.1",
       api_version = "1",
    },
 
@@ -265,6 +260,7 @@ local defaults = {
       FIND = "find",
       TEST = "test",
       CHMOD = "chmod",
+      PATCH = "patch",
 
       ZIP = "zip",
       UNZIP = "unzip -n",
@@ -282,8 +278,6 @@ local defaults = {
 
       RSYNCFLAGS = "--exclude=.git -Oavz",
       STATFLAG = "-c '%a'",
-      CURLNOCERTFLAG = "",
-      WGETNOCERTFLAG = "",
    },
 
    external_deps_subdirs = site_config.LUAROCKS_EXTERNAL_DEPS_SUBDIRS or {
@@ -443,14 +437,11 @@ if detected.macosx then
    defaults.arch = "macosx-"..proc
    defaults.platforms = {"unix", "bsd", "macosx"}
    defaults.variables.LIBFLAG = "-bundle -undefined dynamic_lookup -all_load"
-   defaults.variables.STAT = "/usr/bin/stat"
    defaults.variables.STATFLAG = "-f '%A'"
    local version = io.popen("sw_vers -productVersion"):read("*l")
    version = tonumber(version and version:match("^[^.]+%.([^.]+)")) or 3
-   if version >= 10 then
-      version = 8
-   elseif version >= 5 then
-	  version = 5
+   if version >= 5 then
+      version = 5
    else
       defaults.gcc_rpath = false
    end
@@ -540,11 +531,6 @@ local cfg_mt = {
    end
 }
 setmetatable(cfg, cfg_mt)
-
-if not cfg.check_certificates then
-   cfg.variables.CURLNOCERTFLAG = "-k"
-   cfg.variables.WGETNOCERTFLAG = "--no-check-certificate"
-end
 
 function cfg.make_paths_from_tree(tree)
    local lua_path, lib_path, bin_path

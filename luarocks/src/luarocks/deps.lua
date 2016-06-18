@@ -608,12 +608,10 @@ function deps.check_external_deps(rockspec, mode)
                   local found = false
                   failed_file = nil
                   for _, f in pairs(files) do
-                  
                      -- small convenience hack
                      if f:match("%.so$") or f:match("%.dylib$") or f:match("%.dll$") then
                         f = f:gsub("%.[^.]+$", "."..cfg.external_lib_extension)
                      end
-                     
                      for _, d in ipairs(paths) do
                         if f:match("%*") then
                            local replaced = f:gsub("%.", "%%."):gsub("%*", ".*")

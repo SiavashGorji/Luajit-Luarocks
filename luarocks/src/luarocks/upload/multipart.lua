@@ -19,8 +19,9 @@ function File:mime()
       local mimetypes_ok, mimetypes = pcall(require, "mimetypes")
       if mimetypes_ok then
          self.mimetype = mimetypes.guess(self.fname)
+      else
+         self.mimetype = "application/octet-stream"
       end
-      self.mimetype = self.mimetype or "application/octet-stream"
    end
    return self.mimetype
 end
