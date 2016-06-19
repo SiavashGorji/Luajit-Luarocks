@@ -31,7 +31,8 @@ mkdir build
 cd build
 ```
 
-This will download the luaJIT/luarocks source files and creates the build directory.
+This will download the luaJIT/luarocks source files into the luajit-luarocks folder, creates and moves to the build directory within it.
+Note that if you do not use the git command and download the the repository directly from https://github.com/SiavashGorji/luajit-luarocks-torch7, the unzipped directory would be named luajit-luarocks-torch7. Either rename this or change the argument of the second cd command above.
 Now, choose a destination to install luajit-luarocks-torch7 (e.g. C:\Programs\LuaJIT) and run
 
 ```sh
