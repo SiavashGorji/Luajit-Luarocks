@@ -15,22 +15,38 @@ Install [CMake](http://cmake.org), [Git](https://git-scm.com/), and a version of
 
 
 # Installation
-Choose a destination directory, preferably a short path with no spaces (e.g. C:\Programs\).
 During all the following steps, we use the Visual Studio Native Tools Command Prompt, which is a command prompt with appropriate environment variables set. You can locate it inside C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts for VS2013, and C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Visual Studio 2015\Visual Studio Tools\Windows Desktop Command Prompts for VS2015.
 
-I recommend using the 64-bit Native Tools (e.g. VS2013 x64 Native Tools Command Prompt or VS2015 x64 Native Tools Command Prompt). Make sure you do not switch from 32-bit to 64-bit (or vice versa) compilation at any point.
+I recommend using the 64-bit Native Tools (e.g. VS2013 x64 Native Tools Command Prompt or VS2015 x64 Native Tools Command Prompt). We will refer to this by NTCP in the reset of this guide. Make sure you do not switch from 32-bit to 64-bit (or vice versa) compilation at any point.
 
 ## 1. luaJIT and luarocks
-
-To install luaJIT and luarocks on Windows,
+Choose a directory to put the source files into, preferably a short path with no spaces (e.g. C:\Programs).
+On your NTCP run,
 
 ```sh
+cd C:\Programs
 git clone https://github.com/SiavashGorji/luajit-rocks.git
-cd luajit-rocks
+cd luajit-luarocks
 mkdir build
 cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=/your/prefix
 ```
+
+This will download the luaJIT/luarocks source files and creates the build directory.
+Now, choose a destination to install luajit-luarocks-torch7 (e.g. C:\Programs\LuaJIT) and run
+
+```sh
+cmake .. -G "NMake Makefiles" -DCMAKE_INSTALL_PREFIX=C:\Programs\LuaJIT
+nmake
+cmake .. -G "NMake Makefiles" -DCMAKE_INSTALL_PREFIX=C:\Programs\LuaJIT -P cmake_install.cmake
+```
+
+The -G "NMake Makefiles" flag tells cmake to generate NMake files instead of a Visual Studio Solution (which it does by fefault on Windows).
+The nmake command actually builds the source files using the cmake-generated make files. 
+The second cmake command copies (installs) all the required files into the destination directory.
+After these commands, you can close your NTCP and delete the luajit-luarocks folder (if you want).
+
+Before proceeding, we need to make some neccessary changes to the environmental variables and the Windows path.
+
 
 Then under Unix systems:
 ```sh
