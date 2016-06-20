@@ -50,7 +50,8 @@ The second cmake command copies (installs) all the required files into the desti
 After these commands, you can close your NTCP and delete the luajit-luarocks folder (if you want).
 
 Finally, we need to add some variables to the Environment Variables and add the installation directory to the Windows path:
-First, add the installation directory (in our case C:\Programs\LuaJIT) to the System Path. You can easily do this using a regular Command Prompt (you can easily open this by pressing WindowsKey+X followed by C (or A for admin)):
+First, add the installation directory (in our case C:\Programs\LuaJIT) to the System Path. You can easily do this using a regular Command Prompt (you can easily open this by pressing WindowsKey+X followed by C (or A for admin)).
+Keep in mind that the Command Prompt sets this for the current user only.
 
 ```sh
 setx path "C:\Programs\LuaJIT;%path%"
@@ -62,26 +63,32 @@ Now, open a regular Command Prompt (exit and reopen if it's already open) and ru
 luajit -e print(package.path)
 ```
 
-We need to create an Environment Variable called LUA_PATH and set its value to the results of the above command (in our case it returned .\?.lua;C:\Programs\LuaJIT\lua\?.lua;C:\Programs\LuaJIT\lua\?\init.lua;).
+We need to create an Environment Variable called LUA_PATH and set its value to the results of the above command (which in our case was ".\?.lua;C:\Programs\LuaJIT\lua\?.lua;C:\Programs\LuaJIT\lua\?\init.lua;").
+Again, we can do this using a regular Command Prompt.
 
-This should list 
-
-
-Then under Unix systems:
 ```sh
-make install
+setx LUA_PATH .\?.lua;C:\Programs\LuaJIT\lua\?.lua;C:\Programs\LuaJIT\lua\?\init.lua;
+```
+Similarly, we need to create LUA_CPATH and set its value to the output of
+
+```sh
+luajit -e print(package.cpath)
 ```
 
-Under Windows:
+which in our case was ".\?.dll;C:\Programs\LuaJIT\?.dll;C:\Programs\LuaJIT\loadall.dll".
+
 ```sh
-nmake install
+setx LUA_CPATH .\?.dll;C:\Programs\LuaJIT\?.dll;C:\Programs\LuaJIT\loadall.dll
 ```
 
-Note: we do not recommend (nor we support) installation under Cygwin.
+Finally, we need to set LUA_DEV to the Lua installation directory
 
-## Additional CMake flags
+```sh
+setx LUA_DEV C:\Programs\LuaJIT
+```
 
-  - If you prefer vanilla Lua 5.1 instead of LuaJIT, use `-DWITH_LUA51=ON`
-  - If you prefer vanilla Lua 5.1 with reference counting instead of LuaJIT, use `-DWITH_LUA51RC=ON` (*experimental*)
-  - If you prefer vanilla Lua 5.2 instead of LuaJIT, use `-DWITH_LUA52=ON`
-  - If you prefer LuaJIT 2.1 instead of LuaJIT 2.0, use `-DWITH_LUAJIT21=ON`
+You can check your luarocks installation by running "luarocks" or "luarocks list" in a regular Command Prompt. 
+The former should display the help for using luarocks and the latter should return the installed packages, which are none for now.
+
+## 2. Torch7
+
