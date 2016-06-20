@@ -49,7 +49,7 @@ The nmake command actually builds the source files using the cmake-generated mak
 The second cmake command copies (installs) all the required files into the destination directory.
 After these commands, you can close your NTCP and delete the luajit-luarocks folder (if you want).
 
-Before proceeding, we need to make some neccessary changes to the Environment Variables and the Windows path:
+Finally, we need to add some variables to the Environment Variables and add the installation directory to the Windows path:
 
 
 
