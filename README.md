@@ -50,7 +50,21 @@ The second cmake command copies (installs) all the required files into the desti
 After these commands, you can close your NTCP and delete the luajit-luarocks folder (if you want).
 
 Finally, we need to add some variables to the Environment Variables and add the installation directory to the Windows path:
+First, add the installation directory (in our case C:\Programs\LuaJIT) to the System Path. You can easily do this using a regular Command Prompt (you can easily open this by pressing WindowsKey+X followed by C (or A for admin)):
 
+```sh
+setx path "C:\Programs\LuaJIT;%path%"
+```
+
+Now, open a regular Command Prompt (exit and reopen if it's already open) and run
+
+```sh
+luajit -e print(package.path)
+```
+
+We need to create an Environment Variable called LUA_PATH and set its value to the results of the above command (in our case it returned .\?.lua;C:\Programs\LuaJIT\lua\?.lua;C:\Programs\LuaJIT\lua\?\init.lua;).
+
+This should list 
 
 
 Then under Unix systems:
