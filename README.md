@@ -32,7 +32,9 @@ cd build
 ```
 
 This will download the luaJIT/luarocks source files into the luajit-luarocks folder, creates and moves to the build directory within it.
+
 Note that if you do not use the git command and download the the repository directly from https://github.com/SiavashGorji/luajit-luarocks-torch7, the unzipped directory would be named luajit-luarocks-torch7. Either rename this or change the argument of the second cd command above.
+
 Now, choose a destination to install luajit-luarocks-torch7 (e.g. C:\Programs\LuaJIT) and run
 
 ```sh
@@ -41,12 +43,14 @@ nmake
 cmake .. -G "NMake Makefiles" -DCMAKE_INSTALL_PREFIX=C:\Programs\LuaJIT -P cmake_install.cmake
 ```
 
+The .. argument to the cmake commands tells them the location of the root CMakeLists.txt (which in our case is located in C:\Programs\luajit-luarocks), relative to the current directory (in our case C:\Programs\luajit-luarocks\build). This is usefull since cmake puts all of its generated makefiles into the current directory.
 The -G "NMake Makefiles" flag tells cmake to generate NMake files instead of a Visual Studio Solution (which it does by fefault on Windows).
 The nmake command actually builds the source files using the cmake-generated make files. 
 The second cmake command copies (installs) all the required files into the destination directory.
 After these commands, you can close your NTCP and delete the luajit-luarocks folder (if you want).
 
-Before proceeding, we need to make some neccessary changes to the environmental variables and the Windows path.
+Before proceeding, we need to make some neccessary changes to the Environment Variables and the Windows path:
+
 
 
 Then under Unix systems:
