@@ -90,5 +90,46 @@ setx LUA_DEV C:\Programs\LuaJIT
 You can check your luarocks installation by running "luarocks" or "luarocks list" in a regular Command Prompt. 
 The former should display the help for using luarocks and the latter should return the installed packages, which are none for now.
 
-## 2. Torch7
+Note that in the installation directory, there is a cmake.cmd which automatically appends any cmake commands (which are called by luarocks) with the -G "NMake Makefiles" flag. In order for this to work, you should make sure that the installation directory precedes cmake installation directory.
 
+## 2. Torch7
+From this point on, we will use luarocks to install all the required packages, including torch7 and its modules.
+Basically, there are two types of lua packages, ones written completely in lua, and ones that contain C/C++ implementation.
+Whenever we want to install a package containing C codes using luarocks, we need to run luarocks within our NTCP instead of a regular Command Prompt (to be safe, you can always use NTCP).
+
+Before installing torch7, we need to install cwrap (purly lua code) and paths (containing C code) modules
+
+```sh
+luarocks install cwrap
+```
+Note that if you run "luarocks list" after this, you should see cwrap in the list of installed modules. Similarly,
+
+```sh
+luarocks install paths
+```
+
+We can now procede by installing torhc7
+
+```sh
+luarocks install torch
+```
+To test the torch installation, we can create and display a 2x3x4 randomly initialized tensor on a regular Command Prompt by
+```sh
+C:\Programs>luajit
+LuaJIT 2.1.0-beta2 -- Copyright (C) 2005-2016 Mike Pall. http://luajit.org/
+JIT: ON SSE2 SSE3 SSE4.1 AMD fold cse dce fwd dse narrow loop abc sink fuse
+> torch = require "torch"
+> print(torch.Tensor(2,3,4))
+(1,.,.) =
+ 1e-312 *
+   7.1084  7.1084  7.1084  7.1084
+   7.1084  7.1084  7.1084  7.1084
+   7.1084  7.1084  7.1084  7.1084
+
+(2,.,.) =
+ 1e-312 *
+   7.1084  7.1084  7.1084  7.1084
+   7.1084  7.1084  7.1084  7.1084
+   7.1084  7.1084  7.1084  7.1084
+[torch.DoubleTensor of size 2x3x4]
+```
