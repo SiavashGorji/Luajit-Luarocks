@@ -114,22 +114,9 @@ We can now procede by installing torhc7
 luarocks install torch
 ```
 To test the torch installation, we can create and display a 2x3x4 randomly initialized tensor on a regular Command Prompt by
+
 ```sh
 C:\Programs>luajit
-LuaJIT 2.1.0-beta2 -- Copyright (C) 2005-2016 Mike Pall. http://luajit.org/
-JIT: ON SSE2 SSE3 SSE4.1 AMD fold cse dce fwd dse narrow loop abc sink fuse
 > torch = require "torch"
 > print(torch.Tensor(2,3,4))
-(1,.,.) =
- 1e-312 *
-   7.1084  7.1084  7.1084  7.1084
-   7.1084  7.1084  7.1084  7.1084
-   7.1084  7.1084  7.1084  7.1084
-
-(2,.,.) =
- 1e-312 *
-   7.1084  7.1084  7.1084  7.1084
-   7.1084  7.1084  7.1084  7.1084
-   7.1084  7.1084  7.1084  7.1084
-[torch.DoubleTensor of size 2x3x4]
 ```
