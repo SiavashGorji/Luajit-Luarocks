@@ -13,6 +13,7 @@ This repository is forked from [torch/luajit-rocks](https://github.com/torch/lua
 # Pre-requisites
 Install [CMake](http://cmake.org), [Git](https://git-scm.com/), and a version of [Visual Studio 2013/2015](https://www.visualstudio.com/) (Community editions are free) on your system.
 If you want CUDA capabalities, install [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) after installing Visual Studio.
+If you want Qt support (for qtlua and qttorch modules), follow [this guide](http://doc.qt.io/qt-4.8/install-win.html) to install Qt 4.8. You can download the source, I recommend 4.8.6, from [here](https://download.qt.io/archive/qt/). Note that there are also pre-built binaries for VS2008 and VS2010. But we need to build it for our choice of Visual Studio.
 
 # Installing LuaJIT/Luarocks/Torch7
 During all the following steps, we use the Visual Studio Native Tools Command Prompt, which is a command prompt with appropriate environment variables set. You can locate it inside C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts for VS2013, and C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Visual Studio 2015\Visual Studio Tools\Windows Desktop Command Prompts for VS2015.
